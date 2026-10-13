@@ -235,7 +235,7 @@ describe('YouTubeAdapter Layout & Docking', () => {
     expect(sidebarEl.style.display).toBe('flex');
   });
 
-  it('hides sidebar in Fullscreen Mode', async () => {
+  it('hides sidebar in Fullscreen Mode via watch-flexy attribute, movie_player class, or body class', async () => {
     const { YouTubeAdapter } = await import('../src/adapters/YouTubeAdapter');
     adapter = new YouTubeAdapter();
 
@@ -249,6 +249,28 @@ describe('YouTubeAdapter Layout & Docking', () => {
     adapter.repositionSidebar(sidebarEl);
 
     expect(sidebarEl.style.display).toBe('none');
+    expect(document.body.classList.contains('cr-fullscreen')).toBe(true);
+
+    // Test fullscreen even when theater attribute is also present
+    watchFlexy.setAttribute('theater', '');
+    adapter.repositionSidebar(sidebarEl);
+    expect(sidebarEl.style.display).toBe('none');
+
+    // Test fullscreen via #movie_player.ytp-fullscreen
+    watchFlexy.removeAttribute('fullscreen');
+    watchFlexy.removeAttribute('theater');
+    const moviePlayer = document.createElement('div');
+    moviePlayer.id = 'movie_player';
+    moviePlayer.className = 'html5-video-player ytp-fullscreen';
+    document.body.appendChild(moviePlayer);
+
+    adapter.repositionSidebar(sidebarEl);
+    expect(sidebarEl.style.display).toBe('none');
+    expect(document.body.classList.contains('cr-fullscreen')).toBe(true);
+
+    // Cleanup movie player
+    moviePlayer.remove();
+    document.body.classList.remove('cr-fullscreen');
   });
 
   it('hides sidebar and displays collapsed pill bar in #secondary when closed', async () => {
