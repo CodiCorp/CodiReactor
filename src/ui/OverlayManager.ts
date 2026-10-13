@@ -19,7 +19,6 @@ export class OverlayManager {
   private targetLine: HTMLElement | null = null;
   private translationLine: HTMLElement | null = null;
   private dictPopup: HTMLElement | null = null;
-  private controlsBar: HTMLElement | null = null;
   private hoverBalloon: HTMLElement | null = null;
   private loadingToast: HTMLElement | null = null;
   private isVisible = true;
@@ -107,18 +106,11 @@ export class OverlayManager {
     this.dictPopup.setAttribute('aria-label', 'Word definition');
     this.dictPopup.hidden = true;
 
-    // Player controls
-    this.controlsBar = document.createElement('div');
-    this.controlsBar.className = 'cr-player-controls';
-    this.controlsBar.setAttribute('role', 'toolbar');
-    this.controlsBar.setAttribute('aria-label', 'CodiReactor controls');
-
     // Assemble
     container.appendChild(prevArrow);
     container.appendChild(nextArrow);
     container.appendChild(this.subtitleBox);
     container.appendChild(this.dictPopup);
-    container.appendChild(this.controlsBar);
 
     this.shadowRoot.appendChild(container);
     parent.appendChild(this.hostElement);
@@ -341,49 +333,11 @@ export class OverlayManager {
     }
   }
 
-  /**
-   * Add player controls (toggle, auto-pause, coverage badge).
-   */
-  addControls(controls: {
-    onToggle?: () => void;
-    onAutoPause?: () => void;
-    onTranscript?: () => void;
-    coveragePercent?: number;
-  }): void {
-    if (!this.controlsBar) return;
-    this.controlsBar.replaceChildren();
+  /** Deprecated: in-player overlay controls removed in favor of native host player bar controls */
+  addControls(_controls?: unknown): void {}
 
-    // Master toggle
-    const toggleBtn = this.createControlBtn('LR', 'Toggle CodiReactor', controls.onToggle);
-    toggleBtn.classList.add('cr-active');
-    this.controlsBar.appendChild(toggleBtn);
-
-    // Auto-pause
-    const apBtn = this.createControlBtn('AP', 'Auto-Pause', controls.onAutoPause);
-    this.controlsBar.appendChild(apBtn);
-
-    // Transcript toggle
-    const txBtn = this.createControlBtn('📜', 'Transcript', controls.onTranscript);
-    this.controlsBar.appendChild(txBtn);
-
-    // Coverage badge
-    if (controls.coveragePercent !== undefined) {
-      const badge = document.createElement('span');
-      badge.className = 'cr-coverage-badge';
-      badge.textContent = `${controls.coveragePercent}%`;
-      badge.title = `You know ${controls.coveragePercent}% of words`;
-      this.controlsBar.appendChild(badge);
-    }
-  }
-
-  /** Update the coverage badge */
-  updateCoverage(percent: number): void {
-    if (!this.controlsBar) return;
-    const badge = this.controlsBar.querySelector('.cr-coverage-badge');
-    if (badge) {
-      badge.textContent = `${percent}%`;
-    }
-  }
+  /** Deprecated: coverage badge in floating overlay removed */
+  updateCoverage(_percent?: number): void {}
 
   /** Clear the subtitle display */
   clearSubtitles(): void {
@@ -640,7 +594,6 @@ export class OverlayManager {
     this.targetLine = null;
     this.translationLine = null;
     this.dictPopup = null;
-    this.controlsBar = null;
   }
 
   // ─── Private Helpers ─────────────────────────────
@@ -651,15 +604,6 @@ export class OverlayManager {
     btn.textContent = symbol;
     btn.setAttribute('aria-label', className.includes('prev') ? 'Previous subtitle' : 'Next subtitle');
     btn.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
-    return btn;
-  }
-
-  private createControlBtn(label: string, ariaLabel: string, onClick?: () => void): HTMLElement {
-    const btn = document.createElement('button');
-    btn.className = 'cr-control-btn';
-    btn.textContent = label;
-    btn.setAttribute('aria-label', ariaLabel);
-    if (onClick) btn.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
     return btn;
   }
 }

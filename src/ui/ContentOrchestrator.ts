@@ -85,13 +85,6 @@ export class ContentOrchestrator {
       onSaveCurrent: () => this.saveCurrentSubtitle(),
     });
 
-    // Set up overlay controls
-    this.overlay.addControls({
-      onToggle: () => this.toggleEnabled(),
-      onAutoPause: () => this.toggleAutoPause(),
-      coveragePercent: 0,
-    });
-
     // Set up native player bar controls (injected into YouTube/Netflix control bar)
     const hostControls = buildHostPlayerControls({
       onToggle: (enabled) => {
