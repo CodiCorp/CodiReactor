@@ -1,0 +1,68 @@
+{
+  "manifest_version": 3,
+  "name": "CodiReactor — Universal Language Immersion",
+  "version": "1.0.0",
+  "description": "Interactive dual subtitles, tokenized vocabulary matrices, instant dictionary, and SM-2 SRS PhrasePump for YouTube, Netflix, Udemy, Coursera, and web articles.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "contextMenus",
+    "offscreen"
+  ],
+  "optional_permissions": [
+    "tts"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://youtube.com/*",
+    "*://*.netflix.com/*",
+    "*://netflix.com/*",
+    "*://*.udemy.com/*",
+    "*://udemy.com/*",
+    "*://*.coursera.org/*",
+    "*://coursera.org/*",
+    "https://api.dictionaryapi.dev/*",
+    "http://localhost:11434/*"
+  ],
+  "background": {
+    "service_worker": "serviceWorker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*", "*://youtube.com/*"],
+      "js": ["contentYouTube.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.netflix.com/*", "*://netflix.com/*"],
+      "js": ["contentNetflix.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.udemy.com/*", "*://udemy.com/*"],
+      "js": ["contentUdemy.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.coursera.org/*", "*://coursera.org/*"],
+      "js": ["contentCoursera.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["contentWebReader.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected/fetchProxy.js", "assets/*"],
+      "matches": ["*://*.youtube.com/*", "*://youtube.com/*", "*://*.netflix.com/*", "*://netflix.com/*"]
+    }
+  ],
+  "action": {
+    "default_title": "CodiReactor Controls",
+    "default_popup": "popup/index.html"
+  }
+}

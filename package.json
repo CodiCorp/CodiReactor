@@ -1,0 +1,37 @@
+{
+  "name": "codireactor",
+  "version": "0.1.0",
+  "description": "Language immersion for video — dual subtitles, word-level color coding, SRS flashcards, AI dictionary. Works on YouTube, Netflix, Udemy, Coursera.",
+  "type": "module",
+  "scripts": {
+    "dev:ext": "vite build --mode extension --watch",
+    "dev:web": "vite dev",
+    "build:ext": "node scripts/build-extension.mjs",
+    "build:web": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "language-learning",
+    "subtitles",
+    "chrome-extension",
+    "srs",
+    "vocabulary"
+  ],
+  "author": "CodiReactor",
+  "license": "MIT",
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.33",
+    "@types/chrome": "^0.3.5",
+    "jsdom": "^30.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  },
+  "dependencies": {
+    "dexie": "^4.4.6",
+    "dompurify": "^3.4.17"
+  }
+}

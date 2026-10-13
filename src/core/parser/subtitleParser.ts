@@ -1,0 +1,263 @@
+// ─────────────────────────────────────────────────
+// Subtitle Parsers: VTT, SRT, TTML, YouTube JSON3
+// Pure functions — no side effects, fully testable
+// ─────────────────────────────────────────────────
+
+import { SubtitleCue } from '../types';
+
+/** Parse a timestamp string to milliseconds */
+function parseTimestamp(ts: string): number {
+  // Handles both HH:MM:SS.mmm and HH:MM:SS,mmm (SRT uses comma)
+  const normalized = ts.trim().replace(',', '.');
+  const parts = normalized.split(':');
+
+  if (parts.length === 3) {
+    const [h, m, rest] = parts;
+    const [s, ms = '0'] = rest.split('.');
+    return (
+      parseInt(h, 10) * 3600000 +
+      parseInt(m, 10) * 60000 +
+      parseInt(s, 10) * 1000 +
+      parseInt(ms.padEnd(3, '0').slice(0, 3), 10)
+    );
+  } else if (parts.length === 2) {
+    // MM:SS.mmm format
+    const [m, rest] = parts;
+    const [s, ms = '0'] = rest.split('.');
+    return (
+      parseInt(m, 10) * 60000 +
+      parseInt(s, 10) * 1000 +
+      parseInt(ms.padEnd(3, '0').slice(0, 3), 10)
+    );
+  }
+
+  return 0;
+}
+
+/** Strip HTML tags from subtitle text */
+function stripTags(text: string): string {
+  return text.replace(/<[^>]+>/g, '').trim();
+}
+
+// ─── WebVTT Parser ───────────────────────────────
+
+export function parseVTT(vttContent: string): SubtitleCue[] {
+  const cues: SubtitleCue[] = [];
+  // Split into blocks separated by empty lines
+  const blocks = vttContent.split(/\n\s*\n/);
+  let cueIndex = 0;
+
+  for (const block of blocks) {
+    const lines = block.trim().split('\n');
+    if (lines.length < 2) continue;
+
+    // Find the timing line (contains ' --> ')
+    let timingLineIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes(' --> ')) {
+        timingLineIdx = i;
+        break;
+      }
+    }
+    if (timingLineIdx === -1) continue;
+
+    const timingLine = lines[timingLineIdx];
+    const [startStr, endStr] = timingLine.split(' --> ').map(s => s.split(' ')[0].trim());
+
+    const startMs = parseTimestamp(startStr);
+    const endMs = parseTimestamp(endStr);
+
+    // Text is everything after the timing line
+    const text = lines
+      .slice(timingLineIdx + 1)
+      .map(l => stripTags(l))
+      .filter(l => l.length > 0)
+      .join(' ');
+
+    if (text.length > 0) {
+      cues.push({
+        id: `vtt-${cueIndex++}`,
+        startMs,
+        endMs,
+        text,
+      });
+    }
+  }
+
+  return cues;
+}
+
+// ─── SRT Parser ──────────────────────────────────
+
+export function parseSRT(srtContent: string): SubtitleCue[] {
+  const cues: SubtitleCue[] = [];
+  // Normalize line endings
+  const normalized = srtContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const blocks = normalized.split(/\n\s*\n/);
+
+  for (const block of blocks) {
+    const lines = block.trim().split('\n');
+    if (lines.length < 2) continue;
+
+    // First line is the cue number (or timing line if no number)
+    let timingLineIdx = 0;
+    if (/^\d+$/.test(lines[0].trim())) {
+      timingLineIdx = 1;
+    }
+
+    if (timingLineIdx >= lines.length) continue;
+    const timingLine = lines[timingLineIdx];
+    if (!timingLine.includes(' --> ')) continue;
+
+    const [startStr, endStr] = timingLine.split(' --> ').map(s => s.trim());
+    const startMs = parseTimestamp(startStr);
+    const endMs = parseTimestamp(endStr);
+
+    const text = lines
+      .slice(timingLineIdx + 1)
+      .map(l => stripTags(l))
+      .filter(l => l.length > 0)
+      .join(' ');
+
+    if (text.length > 0) {
+      cues.push({
+        id: `srt-${lines[0]?.trim() || cues.length}`,
+        startMs,
+        endMs,
+        text,
+      });
+    }
+  }
+
+  return cues;
+}
+
+// ─── TTML / DFXP Parser (Netflix) ────────────────
+
+export function parseTTML(xmlContent: string): SubtitleCue[] {
+  const cues: SubtitleCue[] = [];
+
+  // Regex-based extraction that works without DOMParser in service worker
+  // Match <p> elements with begin/end or begin/dur attributes
+  const pRegex = /<p[^>]*\sbegin=["']([^"']+)["'][^>]*\send=["']([^"']+)["'][^>]*>([\s\S]*?)<\/p>/gi;
+
+  let match: RegExpExecArray | null;
+  let index = 0;
+
+  while ((match = pRegex.exec(xmlContent)) !== null) {
+    const [, beginStr, endStr, content] = match;
+    const startMs = parseTTMLTimestamp(beginStr);
+    const endMs = parseTTMLTimestamp(endStr);
+    const text = stripTags(content.replace(/<br\s*\/?>/gi, ' ')).trim();
+
+    if (text.length > 0) {
+      cues.push({
+        id: `ttml-${index++}`,
+        startMs,
+        endMs,
+        text,
+      });
+    }
+  }
+
+  return cues;
+}
+
+/** Parse TTML timestamp formats: HH:MM:SS.mmm or HH:MM:SS:FF (framerate) or ticks */
+function parseTTMLTimestamp(ts: string): number {
+  ts = ts.trim();
+
+  // Tick format: e.g., "10000000t" = 1 second (10 million ticks)
+  if (ts.endsWith('t')) {
+    const ticks = parseInt(ts.slice(0, -1), 10);
+    return Math.round(ticks / 10000); // Convert ticks to ms
+  }
+
+  // Standard HH:MM:SS.mmm or HH:MM:SS:FF
+  return parseTimestamp(ts.replace(/:\d{1,2}$/, '')); // Strip frame count if present
+}
+
+// ─── YouTube JSON3 Parser ────────────────────────
+
+export interface YouTubeJSON3 {
+  wireMagic?: string;
+  events?: YouTubeJSON3Event[];
+}
+
+interface YouTubeJSON3Event {
+  tStartMs?: number;
+  dDurationMs?: number;
+  segs?: Array<{
+    utf8: string;
+    acAsrConf?: number;
+  }>;
+  aAppend?: number;
+  wWinId?: number;
+}
+
+export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
+  const cues: SubtitleCue[] = [];
+
+  if (!json.events) return cues;
+
+  let cueIndex = 0;
+  for (const event of json.events) {
+    // Skip non-text events (window styling, etc.)
+    if (!event.segs || event.segs.length === 0) continue;
+    if (event.tStartMs === undefined) continue;
+
+    const startMs = event.tStartMs;
+    const endMs = startMs + (event.dDurationMs || 5000);
+
+    // Concatenate all segments
+    const text = event.segs
+      .map(seg => seg.utf8)
+      .join('')
+      .replace(/\n/g, ' ')
+      .trim();
+
+    if (text.length > 0 && text !== '\n') {
+      cues.push({
+        id: `yt-${cueIndex++}`,
+        startMs,
+        endMs,
+        text,
+      });
+    }
+  }
+
+  return cues;
+}
+
+// ─── Auto-detect and parse ───────────────────────
+
+export function autoParseSubtitles(content: string): SubtitleCue[] {
+  const trimmed = content.trim();
+
+  // YouTube JSON3
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const json = JSON.parse(trimmed);
+      if (json.wireMagic || json.events) {
+        return parseJSON3(json);
+      }
+    } catch {
+      // Not valid JSON, fall through
+    }
+  }
+
+  // TTML / XML
+  if (trimmed.startsWith('<?xml') || trimmed.startsWith('<tt')) {
+    return parseTTML(trimmed);
+  }
+
+  // WebVTT
+  if (trimmed.startsWith('WEBVTT')) {
+    return parseVTT(trimmed);
+  }
+
+  // Default: try SRT
+  return parseSRT(trimmed);
+}
+
+export { parseTimestamp };

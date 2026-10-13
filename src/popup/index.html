@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodiReactor Command Center</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(24, 32, 47, 0.75);
+      --border: rgba(139, 92, 246, 0.25);
+      --accent: #8b5cf6;
+      --accent-glow: #a78bfa;
+      --cyan: #38bdf8;
+      --emerald: #10b981;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      width: 360px;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      user-select: none;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 16px;
+      color: var(--accent-glow);
+    }
+
+    .brand-logo {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #a855f7, #6366f1);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .badge-status {
+      font-size: 10px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-weight: 600;
+    }
+
+    /* Supabase Account Card */
+    .account-card {
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.8));
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .account-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .account-email {
+      font-size: 12px;
+      font-weight: 600;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+
+    .level-badge {
+      background: rgba(168, 85, 247, 0.2);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: #d8b4fe;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .account-details {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    /* Quick Tools Grid */
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin: 10px 0 6px 2px;
+    }
+
+    .tools-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .tool-btn {
+      background: var(--card-bg);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 10px 8px;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .tool-btn:hover {
+      background: rgba(45, 55, 72, 0.85);
+      border-color: rgba(139, 92, 246, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .tool-icon {
+      font-size: 16px;
+    }
+
+    .tool-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .tool-desc {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Player Controls Card */
+    .controls-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .toggle-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .toggle-label {
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: .25s;
+      border-radius: 20px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .25s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--accent);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(16px);
+    }
+
+    /* Full Settings Button */
+    .btn-settings {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      background: linear-gradient(135deg, #7c3aed, #6d28d9);
+      color: white;
+      text-align: center;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+
+    .btn-settings:hover {
+      background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <div class="brand-logo">CR</div>
+      <span>CodiReactor</span>
+    </div>
+    <span class="badge-status">● Supabase Connected</span>
+  </div>
+
+  <!-- Supabase Profile & Sync Card -->
+  <div class="account-card">
+    <div class="account-row">
+      <div class="account-email" id="user-email">abdelrahman@codi.ai</div>
+      <div class="level-badge" id="user-level">CEFR B1</div>
+    </div>
+    <div class="account-details">
+      <span>Language: <b>EN ➔ AR</b></span>
+      <span id="sync-status">Cloud Synced ☁️</span>
+    </div>
+  </div>
+
+  <!-- Tools Quick Launch (Web App & SRS) -->
+  <div class="section-title">Immersion Tools & Web App</div>
+  <div class="tools-grid">
+    <div class="tool-btn" id="btn-catalog">
+      <span class="tool-icon">🎬</span>
+      <span class="tool-name">Video Catalog</span>
+      <span class="tool-desc">YouTube videos with CEFR %</span>
+    </div>
+    <div class="tool-btn" id="btn-notebook">
+      <span class="tool-icon">📚</span>
+      <span class="tool-name">Saved Words</span>
+      <span class="tool-desc">Notebook & Anki Export</span>
+    </div>
+    <div class="tool-btn" id="btn-srs">
+      <span class="tool-icon">🗂️</span>
+      <span class="tool-name">PhrasePump</span>
+      <span class="tool-desc">SM-2 Listening Practice</span>
+    </div>
+    <div class="tool-btn" id="btn-aria">
+      <span class="tool-icon">💬</span>
+      <span class="tool-name">Aria AI Chat</span>
+      <span class="tool-desc">Scenario roleplay tutor</span>
+    </div>
+  </div>
+
+  <!-- In-Player Subtitle Settings -->
+  <div class="section-title">YouTube & Video Controls</div>
+  <div class="controls-card">
+    <div class="toggle-row">
+      <span class="toggle-label"><span>📺</span> Dual Subtitles (LR)</span>
+      <label class="switch">
+        <input type="checkbox" id="toggle-lr" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label"><span>⏸️</span> Auto-Pause per Subtitle (AP)</span>
+      <label class="switch">
+        <input type="checkbox" id="toggle-ap">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label"><span>🎨</span> CEFR Color Highlights</span>
+      <label class="switch">
+        <input type="checkbox" id="toggle-colors" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Open Full Settings Modal -->
+  <button class="btn-settings" id="btn-open-settings">
+    <span>⚙️</span> Open Full Extension Settings
+  </button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

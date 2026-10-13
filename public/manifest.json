@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "CodiReactor — Language Immersion for Video",
+  "version": "0.1.0",
+  "description": "Transform any video into a language learning experience. Dual subtitles, word-level color coding, SRS flashcards, and AI-powered dictionary — works on YouTube, Netflix, Udemy, and more.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "contextMenus",
+    "tts"
+  ],
+  "optional_permissions": [
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://www.netflix.com/*",
+    "https://www.udemy.com/*",
+    "https://www.coursera.org/*",
+    "https://api.dictionaryapi.dev/*"
+  ],
+  "background": {
+    "service_worker": "serviceWorker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["contentYouTube.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.netflix.com/*"],
+      "js": ["contentNetflix.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["fetchProxy.js"],
+      "matches": ["https://www.youtube.com/*"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}
