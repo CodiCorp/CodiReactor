@@ -1,30 +1,16 @@
 // ─────────────────────────────────────────────────
-// fetchProxy.js — MAIN World Network Interceptor & Caption Engine
+// fetchProxy.js — MAIN World Caption Engine
 // Sourced from Language Reactor architecture (pageScript_lly.min.js)
-// 1. Intercepts fetch() and XHR for timedtext subtitle requests.
-// 2. Proactively extracts official caption tracks from playerResponse
-//    and fetches the entire video's JSON3 subtitles at page load.
-// 3. Relays full subtitle data via postMessage to the isolated content script.
+// 1. Proactively retrieves official caption tracks from YouTube player
+//    and fetches the entire video's JSON3 subtitles at startup.
+// 2. Relays full subtitle data via postMessage to the isolated content script.
+// NOTE: NEVER monkeypatch window.fetch on YouTube! YouTube's player relies
+// on native fetch for /youtubei/v1/player and MSE video chunk streams.
 // ─────────────────────────────────────────────────
 
 (function () {
-  const SUBTITLE_URL_PATTERNS = [
-    /timedtext/i,
-    /api\/timedtext/i,
-    /subtitle/i,
-    /caption/i,
-    /\.vtt(\?|$)/i,
-    /\.srt(\?|$)/i,
-    /\.ttml(\?|$)/i,
-  ];
-
   let potTokens = {};
   let fetchedTracks = new Set();
-
-  function isSubtitleUrl(url) {
-    if (!url || typeof url !== 'string') return false;
-    return SUBTITLE_URL_PATTERNS.some((pattern) => pattern.test(url));
-  }
 
   function capturePotToken(url) {
     if (!url || typeof url !== 'string') return;
@@ -56,52 +42,35 @@
     );
   }
 
-  // 1. Intercept window.fetch
-  const originalFetch = window.fetch;
-  window.fetch = async function (...args) {
-    const input = args[0];
-    const url = typeof input === 'string' ? input : input?.url || '';
+  // Passive XMLHttpRequest observer (captures pot tokens and native timedtext XHRs without modifying flow)
+  try {
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
 
-    capturePotToken(url);
+    XMLHttpRequest.prototype.open = function (...args) {
+      const url = args[1];
+      if (typeof url === 'string') {
+        capturePotToken(url);
+        this._crTimedTextUrl = url.includes('/timedtext?') || url.includes('/api/timedtext') ? url : null;
+      }
+      return originalOpen.apply(this, args);
+    };
 
-    if (isSubtitleUrl(url)) {
-      return originalFetch.apply(this, args).then((response) => {
-        try {
-          const clone = response.clone();
-          clone.text().then((body) => {
-            relaySubtitleData(url, body);
-          }).catch(() => {});
-        } catch (_) {}
-        return response;
-      });
-    }
+    XMLHttpRequest.prototype.send = function (...args) {
+      if (this._crTimedTextUrl) {
+        this.addEventListener('load', function () {
+          try {
+            if (this.responseText) {
+              relaySubtitleData(this._crTimedTextUrl, this.responseText);
+            }
+          } catch (_) {}
+        });
+      }
+      return originalSend.apply(this, args);
+    };
+  } catch (_) {}
 
-    return originalFetch.apply(this, args);
-  };
-
-  // 2. Intercept XMLHttpRequest
-  const originalOpen = XMLHttpRequest.prototype.open;
-  const originalSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (...args) {
-    const url = args[1];
-    capturePotToken(typeof url === 'string' ? url : '');
-    this._crTimedTextUrl = typeof url === 'string' && isSubtitleUrl(url) ? url : null;
-    return originalOpen.apply(this, args);
-  };
-  XMLHttpRequest.prototype.send = function (...args) {
-    if (this._crTimedTextUrl) {
-      this.addEventListener('load', function () {
-        try {
-          if (this.responseText) {
-            relaySubtitleData(this._crTimedTextUrl, this.responseText);
-          }
-        } catch (_) {}
-      });
-    }
-    return originalSend.apply(this, args);
-  };
-
-  // 3. Proactively retrieve and fetch full video subtitles at startup
+  // Proactively retrieve and fetch full video subtitles at startup
   // Matches Language Reactor Je() architecture: downloads full JSON3 at video start
   async function probeAndFetchOfficialSubtitles() {
     try {
@@ -126,7 +95,7 @@
           } catch (_) {}
 
           try {
-            const res = await originalFetch(fetchUrl, { credentials: 'include' });
+            const res = await window.fetch(fetchUrl, { credentials: 'include' });
             if (res.ok) {
               const text = await res.text();
               if (text && text.trim().length > 0) {
@@ -151,7 +120,7 @@
               let fetchUrl = track.baseUrl.includes('fmt=') ? track.baseUrl : track.baseUrl + '&fmt=json3';
               const cacheKey = track.vss_id || fetchUrl;
               if (!fetchedTracks.has(cacheKey)) {
-                const res = await originalFetch(fetchUrl, { credentials: 'include' });
+                const res = await window.fetch(fetchUrl, { credentials: 'include' });
                 if (res.ok) {
                   const text = await res.text();
                   if (text && text.trim().length > 0) {
@@ -168,13 +137,14 @@
     } catch (_) {}
   }
 
-  // Poll proactively during video initialization (0s, 0.5s, 1s, 2s, 3s)
-  probeAndFetchOfficialSubtitles();
+  // Poll proactively after video navigation / initialization
   window.addEventListener('yt-navigate-finish', () => {
     fetchedTracks.clear();
-    probeAndFetchOfficialSubtitles();
+    setTimeout(probeAndFetchOfficialSubtitles, 300);
   });
-  window.addEventListener('load', probeAndFetchOfficialSubtitles);
+  window.addEventListener('load', () => {
+    setTimeout(probeAndFetchOfficialSubtitles, 300);
+  });
   setTimeout(probeAndFetchOfficialSubtitles, 500);
   setTimeout(probeAndFetchOfficialSubtitles, 1200);
   setTimeout(probeAndFetchOfficialSubtitles, 2500);
