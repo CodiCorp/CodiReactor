@@ -162,11 +162,19 @@ export class ContentOrchestrator {
           });
         },
         onOpenSettings: () => new SettingsModal().open(),
+        onToggleVisibility: (visible: boolean) => {
+          const sidebarEl = this.sidebar?.getElement();
+          const pillEl = this.sidebar?.getCollapsedPill();
+          if (sidebarEl && (this.adapter as any).repositionSidebar) {
+            (this.adapter as any).repositionSidebar(sidebarEl, pillEl || undefined);
+          }
+        },
       });
       this.sidebar.mount();
       const sidebarEl = this.sidebar.getElement();
+      const pillEl = this.sidebar.getCollapsedPill();
       if (sidebarEl && (this.adapter as any).repositionSidebar) {
-        (this.adapter as any).repositionSidebar(sidebarEl);
+        (this.adapter as any).repositionSidebar(sidebarEl, pillEl || undefined);
       }
     }
 

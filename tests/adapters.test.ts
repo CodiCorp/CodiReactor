@@ -250,4 +250,43 @@ describe('YouTubeAdapter Layout & Docking', () => {
 
     expect(sidebarEl.style.display).toBe('none');
   });
+
+  it('hides sidebar and displays collapsed pill bar in #secondary when closed', async () => {
+    const { YouTubeAdapter } = await import('../src/adapters/YouTubeAdapter');
+    adapter = new YouTubeAdapter();
+
+    const watchFlexy = document.createElement('ytd-watch-flexy');
+    watchFlexy.setAttribute('theater', '');
+    const theaterContainer = document.createElement('div');
+    theaterContainer.id = 'player-theater-container';
+    const secondary = document.createElement('div');
+    secondary.id = 'secondary';
+
+    document.body.appendChild(watchFlexy);
+    document.body.appendChild(theaterContainer);
+    document.body.appendChild(secondary);
+
+    const sidebarEl = document.createElement('div');
+    sidebarEl.id = 'codireactor-sidebar-root';
+    const pillEl = document.createElement('div');
+    pillEl.className = 'cr-vv-toggle-in-sidebar';
+
+    // Simulate sidebar closed
+    document.body.classList.add('cr-sidebar-closed');
+    adapter.repositionSidebar(sidebarEl, pillEl);
+
+    expect(secondary.contains(pillEl)).toBe(true);
+    expect(pillEl.style.display).toBe('flex');
+    expect(sidebarEl.style.display).toBe('none');
+
+    // Reopen sidebar
+    document.body.classList.remove('cr-sidebar-closed');
+    adapter.repositionSidebar(sidebarEl, pillEl);
+
+    expect(pillEl.style.display).toBe('none');
+    expect(sidebarEl.style.display).toBe('flex');
+    expect(theaterContainer.contains(sidebarEl)).toBe(true);
+
+    document.body.classList.remove('cr-sidebar-closed');
+  });
 });

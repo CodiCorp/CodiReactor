@@ -16,10 +16,12 @@ export interface SidebarCallbacks {
   onOpenSettings?: () => void;
   onPauseVideo?: () => void;
   onWordStatusChange?: (lemma: string, status: 'known' | 'learning' | 'ignored') => void;
+  onToggleVisibility?: (visible: boolean) => void;
 }
 
 export class SidebarPanel {
   private container: HTMLElement | null = null;
+  private collapsedPill: HTMLElement | null = null;
   private cueListEl: HTMLElement | null = null;
   private hoverCardEl: HTMLElement | null = null;
   private activeTab: 'subtitles' | 'words' | 'saved' = 'subtitles';
@@ -37,11 +39,23 @@ export class SidebarPanel {
 
   constructor(callbacks?: SidebarCallbacks) {
     if (callbacks) this.callbacks = callbacks;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('cr_sidebar_active');
+        if (saved !== null) {
+          this.isVisible = saved === 'true';
+        }
+      }
+    } catch { /* ignore */ }
     this.loadVocabFromStorage();
   }
 
   getElement(): HTMLElement | null {
     return this.container;
+  }
+
+  getCollapsedPill(): HTMLElement | null {
+    return this.collapsedPill;
   }
 
   private loadVocabFromStorage(): void {
@@ -67,6 +81,16 @@ export class SidebarPanel {
   mount(parent: HTMLElement = document.body): void {
     if (this.container) return;
 
+    if (typeof document !== 'undefined') {
+      if (this.isVisible) {
+        document.body.classList.remove('cr-sidebar-closed');
+        document.body.classList.add('cr-sidebar-active');
+      } else {
+        document.body.classList.add('cr-sidebar-closed');
+        document.body.classList.remove('cr-sidebar-active');
+      }
+    }
+
     this.container = document.createElement('div');
     this.container.id = 'codireactor-sidebar-root';
     this.container.className = 'cr-sidebar-panel';
@@ -78,7 +102,7 @@ export class SidebarPanel {
       background: #0f0f0f !important;
       border-left: 1px solid #272727 !important;
       z-index: 20 !important;
-      display: flex !important;
+      display: ${this.isVisible ? 'flex' : 'none'} !important;
       flex-direction: column !important;
       font-family: 'Roboto', 'Segoe UI', -apple-system, sans-serif !important;
       color: #f1f1f1 !important;
@@ -186,7 +210,100 @@ export class SidebarPanel {
     parent.appendChild(this.container);
     parent.appendChild(this.hoverCardEl);
 
+    this.collapsedPill = this.createCollapsedPill();
+    parent.appendChild(this.collapsedPill);
+
     this.renderCues();
+  }
+
+  private createCollapsedPill(): HTMLElement {
+    const pill = document.createElement('div');
+    pill.className = 'cr-vv-toggle-in-sidebar';
+    pill.setAttribute('role', 'button');
+    pill.setAttribute('tabindex', '0');
+    pill.setAttribute('title', 'Open transcript panel');
+    pill.style.cssText = `
+      display: ${this.isVisible ? 'none' : 'flex'} !important;
+      background: #181818 !important;
+      font-size: 14px !important;
+      font-family: 'Roboto', Arial, sans-serif !important;
+      font-weight: 500 !important;
+      padding: 7px 12px !important;
+      margin-bottom: 10px !important;
+      cursor: pointer !important;
+      color: #f1f1f1 !important;
+      border-radius: 4px !important;
+      box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.3) !important;
+      user-select: none !important;
+      box-sizing: border-box !important;
+      width: 100% !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      transition: background 0.15s ease !important;
+      direction: ltr !important;
+    `;
+
+    pill.addEventListener('mouseenter', () => {
+      pill.style.background = '#242424';
+    });
+    pill.addEventListener('mouseleave', () => {
+      pill.style.background = '#181818';
+    });
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'cr-vv-toggle-label';
+    labelSpan.textContent = 'Subtitles (hidden)';
+    labelSpan.style.cssText = `
+      color: #f1f1f1 !important;
+      font-size: 14px !important;
+      line-height: 18px !important;
+      font-weight: 500 !important;
+    `;
+
+    const iconWrapper = document.createElement('div');
+    iconWrapper.className = 'cr-vv-toggle-icon';
+    iconWrapper.style.cssText = `
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 18px !important;
+      height: 18px !important;
+    `;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('version', '1.1');
+    svg.setAttribute('width', '18');
+    svg.setAttribute('height', '18');
+    svg.setAttribute('viewBox', '0 0 384 448');
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('fill', '#ffffff');
+    path.setAttribute(
+      'd',
+      'M203.25 324.75l113.5-113.5c6.25-6.25 6.25-16.25 0-22.5l-25.5-25.5c-6.25-6.25-16.25-6.25-22.5 0l-76.75 76.75-76.75-76.75c-6.25-6.25-16.25-6.25-22.5 0l-25.5 25.5c-6.25 6.25-6.25 16.25 0 22.5l113.5 113.5c6.25 6.25 16.25 6.25 22.5 0zM384 224c0 106-86 192-192 192s-192-86-192-192 86-192 192-192 192 86 192 192z'
+    );
+
+    svg.appendChild(path);
+    iconWrapper.appendChild(svg);
+
+    pill.appendChild(labelSpan);
+    pill.appendChild(iconWrapper);
+
+    pill.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.open();
+    });
+
+    pill.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.open();
+      }
+    });
+
+    return pill;
   }
 
   private createTab(label: string, tabKey: 'subtitles' | 'words' | 'saved', isActive: boolean): HTMLElement {
@@ -1291,13 +1408,49 @@ export class SidebarPanel {
   open(): void {
     if (!this.container) return;
     this.isVisible = true;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('cr_sidebar_active', 'true');
+      }
+    } catch { /* ignore */ }
+
+    if (typeof document !== 'undefined') {
+      document.body.classList.remove('cr-sidebar-closed');
+      document.body.classList.add('cr-sidebar-active');
+    }
+    this.container.style.display = 'flex';
     this.container.style.transform = 'translateX(0)';
+    if (this.collapsedPill) {
+      this.collapsedPill.style.display = 'none';
+    }
+    this.callbacks?.onToggleVisibility?.(true);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('resize'));
+    }
   }
 
   close(): void {
     if (!this.container) return;
     this.isVisible = false;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('cr_sidebar_active', 'false');
+      }
+    } catch { /* ignore */ }
+
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('cr-sidebar-closed');
+      document.body.classList.remove('cr-sidebar-active');
+    }
+    this.container.style.display = 'none';
     this.container.style.transform = 'translateX(100%)';
+    if (this.collapsedPill) {
+      this.collapsedPill.style.display = 'flex';
+    }
+    this.callbacks?.onToggleVisibility?.(false);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('resize'));
+    }
   }
 
   toggle(): void {
@@ -1310,9 +1463,15 @@ export class SidebarPanel {
   }
 
   destroy(): void {
+    if (typeof document !== 'undefined') {
+      document.body.classList.remove('cr-sidebar-active');
+      document.body.classList.remove('cr-sidebar-closed');
+    }
     this.container?.remove();
+    this.collapsedPill?.remove();
     this.hoverCardEl?.remove();
     this.container = null;
+    this.collapsedPill = null;
     this.cueListEl = null;
     this.hoverCardEl = null;
   }

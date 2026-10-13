@@ -30,6 +30,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   private currentCues: SubtitleCue[] = [];
   private hasAuthoritativeCaptions: boolean = false;
   private attachedSidebarEl: HTMLElement | null = null;
+  private attachedCollapsedPillEl: HTMLElement | null = null;
 
   detect(): boolean {
     return window.location.hostname.includes('youtube.com');
@@ -629,17 +630,45 @@ export class YouTubeAdapter extends BasePlatformAdapter {
    * so its height matches the video player exactly (ref/image copy 7.png & image copy 8.png)
    * and never extends outside the player section into comments or recommendations.
    */
-  repositionSidebar(sidebarEl: HTMLElement): void {
+  repositionSidebar(sidebarEl: HTMLElement, collapsedPillEl?: HTMLElement): void {
     if (!sidebarEl) return;
     this.attachedSidebarEl = sidebarEl;
+    if (collapsedPillEl) {
+      this.attachedCollapsedPillEl = collapsedPillEl;
+    }
+    const pill = this.attachedCollapsedPillEl;
+
+    // Ensure collapsed pill bar is always mounted at the top of #secondary
+    const secondary =
+      document.querySelector<HTMLElement>('#secondary.ytd-watch-flexy') ||
+      document.querySelector<HTMLElement>('#secondary') ||
+      document.querySelector<HTMLElement>('#secondary-inner');
+
+    if (secondary && pill && pill.parentElement !== secondary) {
+      if (secondary.firstChild) {
+        secondary.insertBefore(pill, secondary.firstChild);
+      } else {
+        secondary.appendChild(pill);
+      }
+    }
 
     const watchFlexy = document.querySelector('ytd-watch-flexy');
     const isFullscreen = watchFlexy?.hasAttribute('fullscreen');
     if (isFullscreen) {
       sidebarEl.style.display = 'none';
+      if (pill) pill.style.display = 'none';
+      return;
+    }
+
+    // Check if the sidebar is currently closed
+    const isClosed = document.body.classList.contains('cr-sidebar-closed');
+    if (isClosed) {
+      sidebarEl.style.display = 'none';
+      if (pill) pill.style.display = 'flex';
       return;
     } else {
       sidebarEl.style.display = 'flex';
+      if (pill) pill.style.display = 'none';
     }
 
     const isTheater = watchFlexy?.hasAttribute('theater');
@@ -661,16 +690,17 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     } else {
       // Language Reactor Parity for Default Mode (ref/image copy 7.png):
       // $("#secondary.ytd-watch-flexy").prepend(sidebar)
-      const secondary =
-        document.querySelector<HTMLElement>('#secondary.ytd-watch-flexy') ||
-        document.querySelector<HTMLElement>('#secondary') ||
-        document.querySelector<HTMLElement>('#secondary-inner');
-
       const video = this.getVideoElement();
       const targetHeight = Math.max(video?.offsetHeight || 0, 450);
 
       if (secondary && sidebarEl.parentElement !== secondary) {
-        if (secondary.firstChild) {
+        if (pill && pill.parentElement === secondary) {
+          if (pill.nextSibling) {
+            secondary.insertBefore(sidebarEl, pill.nextSibling);
+          } else {
+            secondary.appendChild(sidebarEl);
+          }
+        } else if (secondary.firstChild) {
           secondary.insertBefore(sidebarEl, secondary.firstChild);
         } else {
           secondary.appendChild(sidebarEl);
@@ -713,8 +743,8 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       }
 
       /* ─── Theater Mode (ref/image copy 8.png): side-by-side inside player container ─── */
-      ytd-watch-flexy[theater] #player-theater-container,
-      ytd-watch-flexy[theater] #full-bleed-container {
+      body:not(.cr-sidebar-closed) ytd-watch-flexy[theater] #player-theater-container,
+      body:not(.cr-sidebar-closed) ytd-watch-flexy[theater] #full-bleed-container {
         display: flex !important;
         flex-direction: row !important;
         justify-content: flex-end !important;
@@ -722,9 +752,9 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         overflow: visible !important;
       }
 
-      ytd-watch-flexy[theater] #player-theater-container #movie_player,
-      ytd-watch-flexy[theater] #full-bleed-container #movie_player,
-      ytd-watch-flexy[theater] #full-bleed-container #player-container {
+      body:not(.cr-sidebar-closed) ytd-watch-flexy[theater] #player-theater-container #movie_player,
+      body:not(.cr-sidebar-closed) ytd-watch-flexy[theater] #full-bleed-container #movie_player,
+      body:not(.cr-sidebar-closed) ytd-watch-flexy[theater] #full-bleed-container #player-container {
         width: calc(100% - 380px) !important;
         max-width: calc(100% - 380px) !important;
         height: 100% !important;
@@ -734,8 +764,8 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         flex: 1 1 auto !important;
       }
 
-      ytd-watch-flexy[theater] #player-theater-container #codireactor-sidebar-root,
-      ytd-watch-flexy[theater] #full-bleed-container #codireactor-sidebar-root {
+      body:not(.cr-sidebar-closed) ytd-watch-flexy[theater] #player-theater-container #codireactor-sidebar-root,
+      body:not(.cr-sidebar-closed) ytd-watch-flexy[theater] #full-bleed-container #codireactor-sidebar-root {
         width: 380px !important;
         min-width: 380px !important;
         max-width: 380px !important;
@@ -748,11 +778,20 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         border-left: 1px solid #1f1f1f !important;
         box-sizing: border-box !important;
         flex: 0 0 380px !important;
+        display: flex !important;
+      }
+
+      /* When closed in theater mode, expand movie player back to 100% full width */
+      body.cr-sidebar-closed ytd-watch-flexy[theater] #player-theater-container #movie_player,
+      body.cr-sidebar-closed ytd-watch-flexy[theater] #full-bleed-container #movie_player,
+      body.cr-sidebar-closed ytd-watch-flexy[theater] #full-bleed-container #player-container {
+        width: 100% !important;
+        max-width: 100% !important;
       }
 
       /* ─── Default Mode (ref/image copy 7.png): mounted inside #secondary above recommendations ─── */
-      ytd-watch-flexy:not([theater]):not([fullscreen]) #secondary #codireactor-sidebar-root,
-      ytd-watch-flexy:not([theater]):not([fullscreen]) #secondary-inner #codireactor-sidebar-root {
+      body:not(.cr-sidebar-closed) ytd-watch-flexy:not([theater]):not([fullscreen]) #secondary #codireactor-sidebar-root,
+      body:not(.cr-sidebar-closed) ytd-watch-flexy:not([theater]):not([fullscreen]) #secondary-inner #codireactor-sidebar-root {
         width: 100% !important;
         min-width: 100% !important;
         max-width: 100% !important;
@@ -761,10 +800,52 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         border-radius: 8px !important;
         box-sizing: border-box !important;
         flex-shrink: 0 !important;
+        display: flex !important;
+      }
+
+      /* When closed, hide sidebar completely everywhere */
+      body.cr-sidebar-closed #codireactor-sidebar-root {
+        display: none !important;
       }
 
       /* Fullscreen mode: hide sidebar so in-player video expands cleanly */
       ytd-watch-flexy[fullscreen] #codireactor-sidebar-root {
+        display: none !important;
+      }
+
+      /* ─── Collapsed Pill Bar (ref/image 2): Subtitles (hidden) ▼ ─── */
+      .cr-vv-toggle-in-sidebar {
+        display: none;
+        background: #181818 !important;
+        font-size: 14px !important;
+        font-family: 'Roboto', Arial, sans-serif !important;
+        font-weight: 500 !important;
+        padding: 7px 12px !important;
+        margin-bottom: 10px !important;
+        cursor: pointer !important;
+        color: #f1f1f1 !important;
+        border-radius: 4px !important;
+        box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.3) !important;
+        user-select: none !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        transition: background 0.15s ease !important;
+        direction: ltr !important;
+      }
+
+      .cr-vv-toggle-in-sidebar:hover {
+        background: #242424 !important;
+      }
+
+      /* When sidebar is closed, display the collapsed pill bar */
+      body.cr-sidebar-closed .cr-vv-toggle-in-sidebar {
+        display: flex !important;
+      }
+
+      /* When sidebar is active/open, hide the collapsed pill bar */
+      body:not(.cr-sidebar-closed) .cr-vv-toggle-in-sidebar {
         display: none !important;
       }
     `;
@@ -773,7 +854,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     // Watch for theater mode / fullscreen toggles to trigger video resize & re-parent sidebar
     const observer = new MutationObserver(() => {
       if (this.attachedSidebarEl) {
-        this.repositionSidebar(this.attachedSidebarEl);
+        this.repositionSidebar(this.attachedSidebarEl, this.attachedCollapsedPillEl || undefined);
       }
       window.dispatchEvent(new Event('resize'));
     });
