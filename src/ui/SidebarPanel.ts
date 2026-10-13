@@ -69,7 +69,7 @@ export class SidebarPanel {
       position: fixed !important;
       top: 56px !important;
       right: 0 !important;
-      width: 340px !important;
+      width: 380px !important;
       height: calc(100vh - 56px) !important;
       background: #0f0f0f !important;
       border-left: 1px solid #272727 !important;
@@ -274,7 +274,8 @@ export class SidebarPanel {
       const playIcon = row.querySelector<HTMLElement>('.cr-cue-play-icon');
       if (idx === index) {
         row.classList.add('cr-active-row');
-        (row as HTMLElement).style.background = '#1a1a1a';
+        (row as HTMLElement).style.background = '#141414';
+        (row as HTMLElement).style.borderColor = '#2e2e2e';
         if (playIcon) {
           playIcon.style.visibility = 'visible';
           playIcon.style.opacity = '1';
@@ -282,7 +283,8 @@ export class SidebarPanel {
         row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } else {
         row.classList.remove('cr-active-row');
-        (row as HTMLElement).style.background = '#0d0d0d';
+        (row as HTMLElement).style.background = '#0a0a0a';
+        (row as HTMLElement).style.borderColor = '#1a1a1a';
         if (playIcon) {
           playIcon.style.visibility = 'hidden';
           playIcon.style.opacity = '0.6';
@@ -317,36 +319,37 @@ export class SidebarPanel {
       row.style.cssText = `
         display: flex !important;
         align-items: flex-start !important;
-        padding: 11px 14px !important;
-        border-top: 1px solid #1a1a1a !important;
-        background: ${isActive ? '#1a1a1a' : '#0d0d0d'} !important;
+        padding: 8px 10px !important;
+        margin: 3px 6px !important;
+        border-radius: 4px !important;
+        border: 1px solid ${isActive ? '#2e2e2e' : '#1a1a1a'} !important;
+        background: ${isActive ? '#141414' : '#0a0a0a'} !important;
         cursor: pointer !important;
-        transition: background 0.15s ease !important;
+        transition: all 0.15s ease !important;
         position: relative !important;
-        min-height: 40px !important;
+        min-height: 38px !important;
         box-sizing: border-box !important;
       `;
 
-      // 1. Purple Play Circle Button (▶) (Matches ref/image copy.png)
+      // 1. Purple Play Circle Button (▶) (Matches image copy 7.png & image copy 8.png)
       const playCircle = document.createElement('button');
       playCircle.className = 'cr-cue-play-icon';
       playCircle.title = 'Replay this sentence';
       playCircle.setAttribute('aria-label', 'Replay this sentence');
       playCircle.style.cssText = `
-        width: 20px !important;
-        height: 20px !important;
-        min-width: 20px !important;
+        width: 18px !important;
+        height: 18px !important;
+        min-width: 18px !important;
         border-radius: 50% !important;
         background: #9333ea !important;
         color: #ffffff !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 10px !important;
-        margin-right: 10px !important;
+        font-size: 9px !important;
+        margin-right: 8px !important;
         margin-top: 2px !important;
         visibility: ${isActive ? 'visible' : 'hidden'} !important;
-        opacity: ${isActive ? '1' : '0.6'} !important;
         box-shadow: 0 1px 4px rgba(147, 51, 234, 0.4) !important;
         border: none !important;
         cursor: pointer !important;
@@ -385,64 +388,69 @@ export class SidebarPanel {
           continue;
         }
 
+        if (token.isPunctuation) {
+          const punctSpan = document.createElement('span');
+          punctSpan.textContent = token.text;
+          punctSpan.className = 'cr-sidebar-punct';
+          punctSpan.style.cssText = 'color: #888888 !important; padding: 0 !important; margin: 0 !important; display: inline !important;';
+          textWrapper.appendChild(punctSpan);
+          continue;
+        }
+
         const wordSpan = document.createElement('span');
         wordSpan.textContent = token.text;
         wordSpan.className = 'cr-sidebar-word';
         wordSpan.dataset.word = token.cleanText;
         wordSpan.dataset.lemma = token.lemma;
 
-        if (token.isPunctuation) {
-          wordSpan.style.color = '#777777';
+        // Vocabulary status color system (image copy 5 & image copy 6 parity)
+        let wordColor = '#c084fc'; // Default: purple violet for new unconfigured words (image copy 6 parity)
+        let hasBorder = false;
+
+        if (this.knownWords.has(token.lemma)) {
+          wordColor = '#7df9c2'; // Mint green for known words
+        } else if (this.learningWords.has(token.lemma)) {
+          wordColor = '#fbc18d'; // Warm peach orange for learned words (image copy 5 parity)
+          hasBorder = true;
+        } else if (this.ignoredWords.has(token.lemma)) {
+          wordColor = '#777777';
         } else {
-          // Vocabulary status color system (image copy 5 & image copy 6 parity)
-          let wordColor = '#c084fc'; // Default: purple violet for new unconfigured words (image copy 6 parity)
-          let hasBorder = false;
-
-          if (this.knownWords.has(token.lemma)) {
-            wordColor = '#7df9c2'; // Mint green for known words
-          } else if (this.learningWords.has(token.lemma)) {
-            wordColor = '#fbc18d'; // Warm peach orange for learned words (image copy 5 parity)
-            hasBorder = true;
-          } else if (this.ignoredWords.has(token.lemma)) {
-            wordColor = '#777777';
+          const wordLen = token.cleanText.length;
+          if (wordLen <= 3) {
+            wordColor = '#7df9c2'; // High-frequency common words (a, the, is)
           } else {
-            const wordLen = token.cleanText.length;
-            if (wordLen <= 3) {
-              wordColor = '#7df9c2'; // High-frequency common words (a, the, is)
-            } else {
-              wordColor = '#c084fc'; // New unconfigured word in purple!
-            }
+            wordColor = '#c084fc'; // New unconfigured word in purple!
           }
-
-          wordSpan.style.cssText = `
-            cursor: pointer !important;
-            padding: 1px 3px !important;
-            border-radius: 3px !important;
-            transition: background 0.15s ease !important;
-            display: inline-block !important;
-            color: ${wordColor} !important;
-            ${hasBorder ? 'border: 1.5px solid #fbc18d !important;' : ''}
-          `;
-
-          // Word Hover: Show dark card (Screenshot 093511.png)
-          wordSpan.addEventListener('mouseenter', () => {
-            wordSpan.style.background = 'rgba(255, 255, 255, 0.15)';
-            this.handleWordHover(token.cleanText, token.lemma, cue.text, wordSpan);
-          });
-
-          wordSpan.addEventListener('mouseleave', () => {
-            wordSpan.style.background = 'transparent';
-            this.hideHoverCard();
-          });
-
-          // Word Click: Immediately pause video, hide hover card & trigger dictionary
-          wordSpan.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.hideHoverCard();
-            this.callbacks?.onPauseVideo?.();
-            this.callbacks?.onWordClick?.(token.cleanText, token.lemma, wordSpan);
-          });
         }
+
+        wordSpan.style.cssText = `
+          cursor: pointer !important;
+          padding: 1px 2px !important;
+          border-radius: 3px !important;
+          transition: background 0.15s ease !important;
+          display: inline-block !important;
+          color: ${wordColor} !important;
+          ${hasBorder ? 'border: 1.5px solid #fbc18d !important;' : ''}
+        `;
+
+        // Word Hover: Show dark card (Screenshot 093511.png)
+        wordSpan.addEventListener('mouseenter', () => {
+          wordSpan.style.background = 'rgba(255, 255, 255, 0.15)';
+          this.handleWordHover(token.cleanText, token.lemma, cue.text, wordSpan);
+        });
+
+        wordSpan.addEventListener('mouseleave', () => {
+          wordSpan.style.background = 'transparent';
+          this.hideHoverCard();
+        });
+
+        // Word Click: Immediately pause video, hide hover card & trigger dictionary
+        wordSpan.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.hideHoverCard();
+          this.callbacks?.onPauseVideo?.();
+          this.callbacks?.onWordClick?.(token.cleanText, token.lemma, wordSpan);
+        });
 
         textWrapper.appendChild(wordSpan);
       }
@@ -469,6 +477,7 @@ export class SidebarPanel {
         color: ${isSaved ? '#eab308' : '#888888'} !important;
         cursor: pointer !important;
         padding: 0 !important;
+        outline: none !important;
       `;
       starBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -489,16 +498,16 @@ export class SidebarPanel {
       // Row hover effects
       row.addEventListener('mouseenter', () => {
         if (index !== this.activeCueIndex) {
-          row.style.background = '#141414';
+          row.style.background = '#121212';
           playCircle.style.visibility = 'visible';
-          playCircle.style.opacity = '0.75';
+          playCircle.style.opacity = '0.9';
         }
         actionsWrapper.style.display = 'flex';
       });
 
       row.addEventListener('mouseleave', () => {
         if (index !== this.activeCueIndex) {
-          row.style.background = '#0d0d0d';
+          row.style.background = '#0a0a0a';
           playCircle.style.visibility = 'hidden';
           playCircle.style.opacity = '0.6';
         }

@@ -70,61 +70,18 @@ export class OverlayManager {
     this.subtitleBox.setAttribute('role', 'status');
     this.subtitleBox.setAttribute('aria-label', 'Subtitles');
 
-    const mainRow = document.createElement('div');
-    mainRow.className = 'cr-subtitle-main-row';
-
-    // 1. Purple circle replay button (ref/image.png)
-    const replayBtn = document.createElement('button');
-    replayBtn.className = 'cr-sub-replay-btn';
-    replayBtn.textContent = '▶';
-    replayBtn.title = 'Replay sentence (A)';
-    replayBtn.setAttribute('aria-label', 'Replay current sentence');
-    replayBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.onReplayCurrent?.();
-    });
-
-    // 2. Target language sentence line
+    // 1. Target language sentence line
     this.targetLine = document.createElement('div');
     this.targetLine.className = 'cr-subtitle-target';
     this.targetLine.setAttribute('lang', 'en');
     this.targetLine.setAttribute('dir', 'ltr');
 
-    // 3. Actions: Star Bookmark ☆ and Menu ⋮
-    const subActions = document.createElement('div');
-    subActions.className = 'cr-sub-actions';
-
-    const starBtn = document.createElement('button');
-    starBtn.className = 'cr-sub-star-btn';
-    starBtn.textContent = '☆';
-    starBtn.title = 'Save sentence (R)';
-    starBtn.setAttribute('aria-label', 'Save sentence');
-    starBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isSaved = starBtn.textContent === '★';
-      starBtn.textContent = isSaved ? '☆' : '★';
-      starBtn.style.color = isSaved ? 'rgba(255, 255, 255, 0.6)' : '#eab308';
-      this.onSaveCurrent?.();
-    });
-
-    const moreBtn = document.createElement('button');
-    moreBtn.className = 'cr-sub-more-btn';
-    moreBtn.textContent = '⋮';
-    moreBtn.title = 'Options';
-    moreBtn.setAttribute('aria-label', 'Subtitle options');
-
-    subActions.appendChild(starBtn);
-    subActions.appendChild(moreBtn);
-
-    mainRow.appendChild(replayBtn);
-    mainRow.appendChild(this.targetLine);
-    mainRow.appendChild(subActions);
-
+    // 2. Dual subtitle translation line
     this.translationLine = document.createElement('div');
     this.translationLine.className = 'cr-subtitle-translation';
     this.translationLine.style.display = 'none';
 
-    this.subtitleBox.appendChild(mainRow);
+    this.subtitleBox.appendChild(this.targetLine);
     this.subtitleBox.appendChild(this.translationLine);
 
     // Navigation arrows
@@ -205,14 +162,18 @@ export class OverlayManager {
         continue;
       }
 
+      if (token.isPunctuation) {
+        const punctSpan = document.createElement('span');
+        punctSpan.textContent = token.text;
+        punctSpan.className = 'cr-punctuation';
+        this.targetLine.appendChild(punctSpan);
+        continue;
+      }
+
       const span = document.createElement('span');
       span.textContent = token.text;
-
-      if (token.isPunctuation) {
-        span.className = 'cr-word cr-punctuation';
-      } else {
-        const statusClass = `cr-${token.status}`;
-        span.className = `cr-word ${statusClass}`;
+      const statusClass = `cr-${token.status}`;
+      span.className = `cr-word ${statusClass}`;
 
         if (token.outline) {
           span.classList.add('cr-outline');
@@ -261,8 +222,6 @@ export class OverlayManager {
             this.onWordClick?.(token.cleanText, token.lemma, span);
           }
         });
-      }
-
       this.targetLine.appendChild(span);
     }
 

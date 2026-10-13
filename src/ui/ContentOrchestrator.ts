@@ -19,7 +19,7 @@ import { SidebarPanel } from './SidebarPanel';
 import { FirstRunModal } from './FirstRunModal';
 import { lookupWord } from '../services/dictionaryService';
 import { getSentenceTranslation } from '../services/quickTranslation';
-import { consolidateAndSegmentCues } from '../core/parser/sentenceSegmenter';
+import { consolidateAndSegmentCues, cleanSubtitleText } from '../core/parser/sentenceSegmenter';
 import { SubtitleCue, EnrichedToken } from '../core/types';
 
 /**
@@ -244,11 +244,16 @@ export class ContentOrchestrator {
       return;
     }
 
-    // If we receive a large batch (>5 cues), this is likely an official track extraction.
-    // Lock it in as authoritative and consolidate once.
+    // If we receive a large batch (>5 cues), this is an authoritative official track extraction.
+    // Preserve YouTube's exact timedtext cue boundaries for 100% sync!
     if (cues.length > 5) {
       this.hasAuthoritativeTrack = true;
-      this.allCues = consolidateAndSegmentCues(cues);
+      this.allCues = cues
+        .map(c => ({
+          ...c,
+          text: cleanSubtitleText(c.text),
+        }))
+        .filter(c => c.text.length > 0);
       this.sidebar?.setCues(this.allCues);
 
       const video = this.adapter?.getVideoElement();

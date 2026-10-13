@@ -43,6 +43,9 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     // Wait for the video element to be present
     await this.waitForElement(SELECTORS.video, 10000);
 
+    // Set up layout styles for Default Mode (image copy 7.png) and Theater Mode (image copy 8.png)
+    this.setupYouTubeLayoutStyles();
+
     // Set up caption extraction strategies
     this.setupFetchInterception();
     this.setupDOMCaptionObserver();
@@ -596,5 +599,75 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         resolve(document.querySelector<HTMLElement>(selector));
       }, timeoutMs);
     });
+  }
+
+  /**
+   * Sets up responsive layout coordination for YouTube Default Mode (image copy 7.png)
+   * and Theater Mode (image copy 8.png)
+   */
+  private setupYouTubeLayoutStyles(): void {
+    const styleId = 'cr-youtube-layout-styles';
+    if (document.getElementById(styleId)) return;
+
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      /* ─── Theater Mode: Shrink player container to make room for 380px sidebar (image copy 8.png) ─── */
+      ytd-watch-flexy[theater] #player-theater-container,
+      ytd-watch-flexy[theater] #player-wide-container,
+      ytd-watch-flexy[theater] #full-bleed-container,
+      ytd-watch-flexy[theater] #player-full-bleed-container {
+        width: calc(100vw - 380px) !important;
+        max-width: calc(100vw - 380px) !important;
+        height: calc(100vh - 56px) !important;
+        max-height: calc(100vh - 56px) !important;
+        transition: width 0.15s ease !important;
+      }
+
+      ytd-watch-flexy[theater] #movie_player {
+        width: 100% !important;
+        height: 100% !important;
+      }
+
+      ytd-watch-flexy[theater] #movie_player video {
+        max-width: 100% !important;
+        max-height: 100% !important;
+      }
+
+      ytd-watch-flexy[theater] #codireactor-sidebar-root {
+        position: fixed !important;
+        top: 56px !important;
+        right: 0 !important;
+        width: 380px !important;
+        height: calc(100vh - 56px) !important;
+        z-index: 2147483640 !important;
+      }
+
+      /* ─── Default Mode: Dock sidebar on right (image copy 7.png) ─── */
+      ytd-watch-flexy:not([theater]):not([fullscreen]) #codireactor-sidebar-root {
+        position: fixed !important;
+        top: 56px !important;
+        right: 0 !important;
+        width: 380px !important;
+        height: calc(100vh - 56px) !important;
+        z-index: 2147483640 !important;
+      }
+
+      /* Fullscreen mode: hide sidebar so in-player video expands cleanly */
+      ytd-watch-flexy[fullscreen] #codireactor-sidebar-root {
+        display: none !important;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+
+    // Watch for theater mode / fullscreen toggles to trigger video resize
+    const observer = new MutationObserver(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    const watchFlexy = document.querySelector('ytd-watch-flexy');
+    if (watchFlexy) {
+      observer.observe(watchFlexy, { attributes: true, attributeFilter: ['theater', 'fullscreen'] });
+      this.cleanupFns.push(() => observer.disconnect());
+    }
   }
 }
