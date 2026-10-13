@@ -171,6 +171,10 @@ export class ContentOrchestrator {
         onOpenSettings: () => new SettingsModal().open(),
       });
       this.sidebar.mount();
+      const sidebarEl = this.sidebar.getElement();
+      if (sidebarEl && (this.adapter as any).repositionSidebar) {
+        (this.adapter as any).repositionSidebar(sidebarEl);
+      }
     }
 
     // Subscribe to captions
@@ -191,9 +195,24 @@ export class ContentOrchestrator {
     if (tracks.length > 0 && tracks[0].cues.length > 0) {
       this.overlay.hideLoadingToast();
       this.hasAuthoritativeTrack = true;
-      this.allCues = consolidateAndSegmentCues(tracks[0].cues);
+      this.allCues = tracks[0].cues
+        .map(c => ({
+          ...c,
+          text: cleanSubtitleText(c.text),
+        }))
+        .filter(c => c.text.length > 0);
       this.language = tracks[0].language;
       this.sidebar?.setCues(this.allCues);
+
+      // Pre-translate first 5 cues in background for 0ms initial playback latency
+      for (let i = 0; i < Math.min(5, this.allCues.length); i++) {
+        const cue = this.allCues[i];
+        if (!cue.translatedText) {
+          getSentenceTranslation(cue.text, this.nativeLanguage).then(t => {
+            if (t) cue.translatedText = t;
+          });
+        }
+      }
     }
 
     // Set up keyboard shortcuts
@@ -311,9 +330,24 @@ export class ContentOrchestrator {
       getSentenceTranslation(cue.text, this.nativeLanguage).then((trans) => {
         if (trans) {
           cue.translatedText = trans;
-          this.overlay.renderTranslation(trans, this.nativeLanguage);
+          if (this.currentCueIndex !== -1 && this.allCues[this.currentCueIndex]?.id === cue.id) {
+            this.overlay.renderTranslation(trans, this.nativeLanguage);
+          }
         }
       });
+    }
+
+    // Pre-translate upcoming 2 cues for instant 0ms latency playback
+    const currentIdx = this.currentCueIndex;
+    if (currentIdx !== -1) {
+      for (let i = currentIdx + 1; i <= currentIdx + 2 && i < this.allCues.length; i++) {
+        const nextCue = this.allCues[i];
+        if (nextCue && !nextCue.translatedText) {
+          getSentenceTranslation(nextCue.text, this.nativeLanguage).then(t => {
+            if (t) nextCue.translatedText = t;
+          });
+        }
+      }
     }
 
     // Update coverage
@@ -345,19 +379,29 @@ export class ContentOrchestrator {
     this.sidebar?.setActiveTime(timeMs);
 
     // Find the active cue for this timestamp
-    const cueIndex = this.allCues.findIndex(
+    let cueIndex = this.allCues.findIndex(
       c => timeMs >= c.startMs && timeMs <= c.endMs,
     );
+
+    // If between cues, check if we are within 120ms before the upcoming cue for seamless sync
+    if (cueIndex === -1) {
+      const upcomingIndex = this.allCues.findIndex(
+        c => timeMs < c.startMs && (c.startMs - timeMs) <= 120,
+      );
+      if (upcomingIndex !== -1) {
+        cueIndex = upcomingIndex;
+      }
+    }
 
     if (cueIndex !== -1 && cueIndex !== this.currentCueIndex) {
       this.currentCueIndex = cueIndex;
       this.processCue(this.allCues[cueIndex]);
     } else if (cueIndex === -1) {
-      // Between cues — clear display
+      // Between cues — clear display after 400ms pause
       const lastActive = this.currentCueIndex;
       if (lastActive !== -1) {
         const lastCue = this.allCues[lastActive];
-        if (lastCue && timeMs > lastCue.endMs + 500) {
+        if (lastCue && timeMs > lastCue.endMs + 400) {
           this.overlay.clearSubtitles();
           this.currentCueIndex = -1;
         }

@@ -99,17 +99,47 @@ export abstract class BasePlatformAdapter implements IVideoPlatformAdapter {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    // Set up video time tracking
+    // Set up high-precision video time tracking (60fps rAF + HTML5 event fallback)
+    let lastDispatchedTime = -1;
+    let animId: number | null = null;
+
+    const dispatchTime = (rawTimeMs: number) => {
+      // 50ms audio-lead compensation so subtitles appear in perfect sync with spoken audio
+      const compensatedTimeMs = Math.round(rawTimeMs) + 50;
+      if (Math.abs(compensatedTimeMs - lastDispatchedTime) >= 15) {
+        lastDispatchedTime = compensatedTimeMs;
+        for (const cb of this.timeCallbacks) {
+          try { cb(compensatedTimeMs); } catch (e) { console.error('[Adapter] timeUpdate error:', e); }
+        }
+      }
+    };
+
+    const tick = () => {
+      const v = this.getVideoElement();
+      if (v && !v.paused) {
+        dispatchTime(v.currentTime * 1000);
+      }
+      animId = requestAnimationFrame(tick);
+    };
+
+    if (typeof requestAnimationFrame !== 'undefined') {
+      animId = requestAnimationFrame(tick);
+      this.cleanupFns.push(() => {
+        if (animId !== null) cancelAnimationFrame(animId);
+      });
+    }
+
     const video = this.getVideoElement();
     if (video) {
       const onTimeUpdate = () => {
-        const timeMs = video.currentTime * 1000;
-        for (const cb of this.timeCallbacks) {
-          try { cb(timeMs); } catch (e) { console.error('[Adapter] timeUpdate error:', e); }
-        }
+        dispatchTime(video.currentTime * 1000);
       };
       video.addEventListener('timeupdate', onTimeUpdate);
-      this.cleanupFns.push(() => video.removeEventListener('timeupdate', onTimeUpdate));
+      video.addEventListener('seeked', onTimeUpdate);
+      this.cleanupFns.push(() => {
+        video.removeEventListener('timeupdate', onTimeUpdate);
+        video.removeEventListener('seeked', onTimeUpdate);
+      });
     }
   }
 

@@ -209,12 +209,14 @@ export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
     const startMs = event.tStartMs;
     const endMs = startMs + (event.dDurationMs || 5000);
 
-    // Concatenate all segments
-    const text = event.segs
-      .map(seg => seg.utf8)
-      .join('')
-      .replace(/\n/g, ' ')
-      .trim();
+    // Concatenate all segments and decode HTML entities
+    const text = decodeHtmlEntities(
+      event.segs
+        .map(seg => seg.utf8)
+        .join('')
+        .replace(/\n/g, ' ')
+        .trim()
+    );
 
     if (text.length > 0 && text !== '\n') {
       cues.push({

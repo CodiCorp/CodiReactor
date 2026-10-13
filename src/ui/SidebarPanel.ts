@@ -25,6 +25,7 @@ export class SidebarPanel {
   private activeTab: 'subtitles' | 'words' | 'saved' = 'subtitles';
   private cues: SubtitleCue[] = [];
   private activeCueIndex = -1;
+  private activeRowEl: HTMLElement | null = null;
   private savedCueIds = new Set<string>();
   private knownWords = new Set<string>();
   private learningWords = new Set<string>();
@@ -37,6 +38,10 @@ export class SidebarPanel {
   constructor(callbacks?: SidebarCallbacks) {
     if (callbacks) this.callbacks = callbacks;
     this.loadVocabFromStorage();
+  }
+
+  getElement(): HTMLElement | null {
+    return this.container;
   }
 
   private loadVocabFromStorage(): void {
@@ -66,22 +71,22 @@ export class SidebarPanel {
     this.container.id = 'codireactor-sidebar-root';
     this.container.className = 'cr-sidebar-panel';
     this.container.style.cssText = `
-      position: fixed !important;
-      top: 56px !important;
-      right: 0 !important;
       width: 380px !important;
-      height: calc(100vh - 56px) !important;
+      min-width: 380px !important;
+      max-width: 380px !important;
+      height: 100% !important;
       background: #0f0f0f !important;
       border-left: 1px solid #272727 !important;
-      z-index: 2147483640 !important;
+      z-index: 20 !important;
       display: flex !important;
       flex-direction: column !important;
       font-family: 'Roboto', 'Segoe UI', -apple-system, sans-serif !important;
       color: #f1f1f1 !important;
       box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5) !important;
-      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
       user-select: none !important;
       box-sizing: border-box !important;
+      overflow: hidden !important;
+      flex-shrink: 0 !important;
     `;
 
     // 1. Header with Tabs and Actions
@@ -269,32 +274,37 @@ export class SidebarPanel {
   private highlightActiveCue(index: number): void {
     if (!this.cueListEl) return;
 
-    const rows = this.cueListEl.querySelectorAll('.cr-sidebar-cue-row');
-    rows.forEach((row, idx) => {
-      const playIcon = row.querySelector<HTMLElement>('.cr-cue-play-icon');
-      if (idx === index) {
-        row.classList.add('cr-active-row');
-        (row as HTMLElement).style.background = '#141414';
-        (row as HTMLElement).style.borderColor = '#2e2e2e';
-        if (playIcon) {
-          playIcon.style.visibility = 'visible';
-          playIcon.style.opacity = '1';
-        }
-        row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      } else {
-        row.classList.remove('cr-active-row');
-        (row as HTMLElement).style.background = '#0a0a0a';
-        (row as HTMLElement).style.borderColor = '#1a1a1a';
-        if (playIcon) {
-          playIcon.style.visibility = 'hidden';
-          playIcon.style.opacity = '0.6';
-        }
+    // Fast O(1) de-highlight previous row
+    if (this.activeRowEl) {
+      this.activeRowEl.classList.remove('cr-active-row');
+      this.activeRowEl.style.background = '#0a0a0a';
+      this.activeRowEl.style.borderColor = '#1a1a1a';
+      const prevPlayIcon = this.activeRowEl.querySelector<HTMLElement>('.cr-cue-play-icon');
+      if (prevPlayIcon) {
+        prevPlayIcon.style.visibility = 'hidden';
+        prevPlayIcon.style.opacity = '0.6';
       }
-    });
+    }
+
+    // Fast O(1) highlight new active row
+    const targetRow = this.cueListEl.children[index] as HTMLElement | undefined;
+    if (targetRow && targetRow.classList?.contains('cr-sidebar-cue-row')) {
+      this.activeRowEl = targetRow;
+      targetRow.classList.add('cr-active-row');
+      targetRow.style.background = '#141414';
+      targetRow.style.borderColor = '#2e2e2e';
+      const playIcon = targetRow.querySelector<HTMLElement>('.cr-cue-play-icon');
+      if (playIcon) {
+        playIcon.style.visibility = 'visible';
+        playIcon.style.opacity = '1';
+      }
+      targetRow.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    }
   }
 
   private renderCues(): void {
     if (!this.cueListEl) return;
+    this.activeRowEl = null;
     this.cueListEl.replaceChildren();
 
     if (this.cues.length === 0) {
