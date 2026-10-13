@@ -1,7 +1,7 @@
+// @vitest-environment jsdom
 // ─────────────────────────────────────────────────
 // Tests: Platform Adapters
 // Tests adapter detection, interfaces, and registry
-// (DOM tests require JSDOM environment)
 // ─────────────────────────────────────────────────
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -176,5 +176,78 @@ describe('Adapter Detection', () => {
     expect(typeof caps.hasDRM).toBe('boolean');
     expect(typeof caps.supportsMultipleTracks).toBe('boolean');
     expect(typeof caps.canInjectControls).toBe('boolean');
+  });
+});
+
+// ─── YouTubeAdapter Layout & Docking Tests ─────────
+
+describe('YouTubeAdapter Layout & Docking', () => {
+  let adapter: any;
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('docks sidebar in #secondary in Default Mode matching Language Reactor', async () => {
+    const { YouTubeAdapter } = await import('../src/adapters/YouTubeAdapter');
+    adapter = new YouTubeAdapter();
+
+    const watchFlexy = document.createElement('ytd-watch-flexy');
+    const secondary = document.createElement('div');
+    secondary.id = 'secondary';
+    secondary.className = 'ytd-watch-flexy';
+    const video = document.createElement('video');
+    video.className = 'html5-main-video';
+    Object.defineProperty(video, 'offsetHeight', { value: 480, configurable: true });
+
+    document.body.appendChild(watchFlexy);
+    document.body.appendChild(secondary);
+    document.body.appendChild(video);
+
+    const sidebarEl = document.createElement('div');
+    sidebarEl.id = 'codireactor-sidebar-root';
+
+    adapter.repositionSidebar(sidebarEl);
+
+    expect(secondary.contains(sidebarEl)).toBe(true);
+    expect(sidebarEl.style.width).toBe('100%');
+    expect(sidebarEl.style.height).toBe('480px');
+  });
+
+  it('docks sidebar in #player-theater-container in Theater Mode matching Language Reactor', async () => {
+    const { YouTubeAdapter } = await import('../src/adapters/YouTubeAdapter');
+    adapter = new YouTubeAdapter();
+
+    const watchFlexy = document.createElement('ytd-watch-flexy');
+    watchFlexy.setAttribute('theater', '');
+    const theaterContainer = document.createElement('div');
+    theaterContainer.id = 'player-theater-container';
+
+    document.body.appendChild(watchFlexy);
+    document.body.appendChild(theaterContainer);
+
+    const sidebarEl = document.createElement('div');
+    sidebarEl.id = 'codireactor-sidebar-root';
+
+    adapter.repositionSidebar(sidebarEl);
+
+    expect(theaterContainer.contains(sidebarEl)).toBe(true);
+    expect(sidebarEl.style.display).toBe('flex');
+  });
+
+  it('hides sidebar in Fullscreen Mode', async () => {
+    const { YouTubeAdapter } = await import('../src/adapters/YouTubeAdapter');
+    adapter = new YouTubeAdapter();
+
+    const watchFlexy = document.createElement('ytd-watch-flexy');
+    watchFlexy.setAttribute('fullscreen', '');
+    document.body.appendChild(watchFlexy);
+
+    const sidebarEl = document.createElement('div');
+    sidebarEl.id = 'codireactor-sidebar-root';
+
+    adapter.repositionSidebar(sidebarEl);
+
+    expect(sidebarEl.style.display).toBe('none');
   });
 });

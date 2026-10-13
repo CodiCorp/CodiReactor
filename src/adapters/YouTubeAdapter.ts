@@ -82,7 +82,11 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   }
 
   getVideoElement(): HTMLVideoElement | null {
-    return document.querySelector<HTMLVideoElement>(SELECTORS.video);
+    return (
+      document.querySelector<HTMLVideoElement>(SELECTORS.video) ||
+      document.querySelector<HTMLVideoElement>('video.html5-main-video') ||
+      document.querySelector<HTMLVideoElement>('video')
+    );
   }
 
   getScrubberContainer(): HTMLElement | null {
@@ -640,20 +644,45 @@ export class YouTubeAdapter extends BasePlatformAdapter {
 
     const isTheater = watchFlexy?.hasAttribute('theater');
     if (isTheater) {
-      const theaterContainer = document.querySelector<HTMLElement>('#player-theater-container');
+      const theaterContainer =
+        document.querySelector<HTMLElement>('#player-theater-container') ||
+        document.querySelector<HTMLElement>('#full-bleed-container');
       if (theaterContainer && sidebarEl.parentElement !== theaterContainer) {
         theaterContainer.appendChild(sidebarEl);
         window.dispatchEvent(new Event('resize'));
       }
+      if (theaterContainer) {
+        sidebarEl.style.width = '380px';
+        sidebarEl.style.minWidth = '380px';
+        sidebarEl.style.maxWidth = '380px';
+        sidebarEl.style.height = '100%';
+        sidebarEl.style.marginBottom = '0';
+      }
     } else {
-      const defaultContainer =
-        document.querySelector<HTMLElement>('#player-container-outer') ||
-        document.querySelector<HTMLElement>('#ytd-player')?.parentElement ||
-        document.querySelector<HTMLElement>('#player');
-      if (defaultContainer && sidebarEl.parentElement !== defaultContainer) {
-        defaultContainer.appendChild(sidebarEl);
+      // Language Reactor Parity for Default Mode (ref/image copy 7.png):
+      // $("#secondary.ytd-watch-flexy").prepend(sidebar)
+      const secondary =
+        document.querySelector<HTMLElement>('#secondary.ytd-watch-flexy') ||
+        document.querySelector<HTMLElement>('#secondary') ||
+        document.querySelector<HTMLElement>('#secondary-inner');
+
+      const video = this.getVideoElement();
+      const targetHeight = Math.max(video?.offsetHeight || 0, 450);
+
+      if (secondary && sidebarEl.parentElement !== secondary) {
+        if (secondary.firstChild) {
+          secondary.insertBefore(sidebarEl, secondary.firstChild);
+        } else {
+          secondary.appendChild(sidebarEl);
+        }
         window.dispatchEvent(new Event('resize'));
       }
+
+      sidebarEl.style.width = '100%';
+      sidebarEl.style.minWidth = '100%';
+      sidebarEl.style.maxWidth = '100%';
+      sidebarEl.style.height = `${targetHeight}px`;
+      sidebarEl.style.marginBottom = '12px';
     }
   }
 
@@ -684,22 +713,29 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       }
 
       /* ─── Theater Mode (ref/image copy 8.png): side-by-side inside player container ─── */
-      ytd-watch-flexy[theater] #player-theater-container {
+      ytd-watch-flexy[theater] #player-theater-container,
+      ytd-watch-flexy[theater] #full-bleed-container {
         display: flex !important;
         flex-direction: row !important;
+        justify-content: flex-end !important;
         position: relative !important;
         overflow: visible !important;
       }
 
-      ytd-watch-flexy[theater] #player-theater-container #movie_player {
+      ytd-watch-flexy[theater] #player-theater-container #movie_player,
+      ytd-watch-flexy[theater] #full-bleed-container #movie_player,
+      ytd-watch-flexy[theater] #full-bleed-container #player-container {
         width: calc(100% - 380px) !important;
         max-width: calc(100% - 380px) !important;
         height: 100% !important;
         position: relative !important;
         z-index: 10 !important;
+        order: 1 !important;
+        flex: 1 1 auto !important;
       }
 
-      ytd-watch-flexy[theater] #player-theater-container #codireactor-sidebar-root {
+      ytd-watch-flexy[theater] #player-theater-container #codireactor-sidebar-root,
+      ytd-watch-flexy[theater] #full-bleed-container #codireactor-sidebar-root {
         width: 380px !important;
         min-width: 380px !important;
         max-width: 380px !important;
@@ -708,38 +744,23 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         top: 0 !important;
         right: 0 !important;
         z-index: 20 !important;
+        order: 2 !important;
         border-left: 1px solid #1f1f1f !important;
         box-sizing: border-box !important;
+        flex: 0 0 380px !important;
       }
 
-      /* ─── Default Mode (ref/image copy 7.png): side-by-side inside player section ─── */
-      ytd-watch-flexy:not([theater]):not([fullscreen]) #player-container-outer,
-      ytd-watch-flexy:not([theater]):not([fullscreen]) #player {
-        display: flex !important;
-        flex-direction: row !important;
-        position: relative !important;
-      }
-
-      ytd-watch-flexy:not([theater]):not([fullscreen]) #player #movie_player,
-      ytd-watch-flexy:not([theater]):not([fullscreen]) #ytd-player {
-        width: calc(100% - 380px) !important;
-        max-width: calc(100% - 380px) !important;
-        height: 100% !important;
-        position: relative !important;
-        z-index: 10 !important;
-      }
-
-      ytd-watch-flexy:not([theater]):not([fullscreen]) #codireactor-sidebar-root {
-        width: 380px !important;
-        min-width: 380px !important;
-        max-width: 380px !important;
-        height: 100% !important;
-        position: relative !important;
-        top: 0 !important;
-        right: 0 !important;
-        z-index: 20 !important;
-        border-left: 1px solid #1f1f1f !important;
+      /* ─── Default Mode (ref/image copy 7.png): mounted inside #secondary above recommendations ─── */
+      ytd-watch-flexy:not([theater]):not([fullscreen]) #secondary #codireactor-sidebar-root,
+      ytd-watch-flexy:not([theater]):not([fullscreen]) #secondary-inner #codireactor-sidebar-root {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        margin-bottom: 12px !important;
+        border: 1px solid #1f1f1f !important;
+        border-radius: 8px !important;
         box-sizing: border-box !important;
+        flex-shrink: 0 !important;
       }
 
       /* Fullscreen mode: hide sidebar so in-player video expands cleanly */

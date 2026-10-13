@@ -318,6 +318,46 @@ export class ContentOrchestrator {
 
     // Enrich with vocabulary status
     const enriched = enrichTokens(rawTokens, this.language, this.vocab);
+
+    // Attach word-level timestamps (LR Se() parity with linear interpolation fallback)
+    const wordTokens = enriched.filter(t => !t.isPunctuation && !t.isWhitespace);
+    if (cue.wordTimings && cue.wordTimings.length > 0) {
+      let wtIdx = 0;
+      for (let i = 0; i < wordTokens.length; i++) {
+        const token = wordTokens[i];
+        const tokenNorm = token.cleanText.toLowerCase().replace(/[^a-z0-9]/gi, '');
+        let matched = false;
+        for (let j = wtIdx; j < cue.wordTimings.length; j++) {
+          const wt = cue.wordTimings[j];
+          const wtNorm = wt.word.toLowerCase().replace(/[^a-z0-9]/gi, '');
+          if (wtNorm === tokenNorm || wtNorm.includes(tokenNorm) || tokenNorm.includes(wtNorm)) {
+            token.startMs = wt.startMs;
+            token.endMs = wt.endMs;
+            wtIdx = j + 1;
+            matched = true;
+            break;
+          }
+        }
+        if (!matched && wtIdx < cue.wordTimings.length) {
+          token.startMs = cue.wordTimings[wtIdx].startMs;
+          token.endMs = cue.wordTimings[wtIdx].endMs;
+          wtIdx++;
+        }
+      }
+    }
+
+    // Fallback: If any word token lacks timing, interpolate evenly across cue duration
+    if (wordTokens.length > 0) {
+      const cueDuration = Math.max(1, cue.endMs - cue.startMs);
+      const step = cueDuration / wordTokens.length;
+      for (let i = 0; i < wordTokens.length; i++) {
+        if (wordTokens[i].startMs === undefined || wordTokens[i].endMs === undefined) {
+          wordTokens[i].startMs = Math.round(cue.startMs + i * step);
+          wordTokens[i].endMs = Math.round(cue.startMs + (i + 1) * step);
+        }
+      }
+    }
+
     this.currentTokens = enriched;
 
     // Render target line with token colors
@@ -351,8 +391,8 @@ export class ContentOrchestrator {
     }
 
     // Update coverage
-    const wordTokens = enriched.filter(t => !t.isPunctuation && !t.isWhitespace);
-    const lemmas = wordTokens.map(t => t.lemma);
+    const wordTokensForCoverage = enriched.filter(t => !t.isPunctuation && !t.isWhitespace);
+    const lemmas = wordTokensForCoverage.map(t => t.lemma);
     const coverage = calculateCoverage(lemmas, 1000, this.vocab.knownWords);
     this.overlay.updateCoverage(coverage);
 
@@ -378,15 +418,18 @@ export class ContentOrchestrator {
     // Update active cue in sidebar
     this.sidebar?.setActiveTime(timeMs);
 
+    // Language Reactor 125ms audio lead offset (S = 125ms)
+    const effectiveTime = timeMs + 125;
+
     // Find the active cue for this timestamp
     let cueIndex = this.allCues.findIndex(
-      c => timeMs >= c.startMs && timeMs <= c.endMs,
+      c => effectiveTime >= c.startMs && timeMs <= c.endMs,
     );
 
-    // If between cues, check if we are within 120ms before the upcoming cue for seamless sync
+    // If between cues, check if we are within 125ms before upcoming cue for seamless sync
     if (cueIndex === -1) {
       const upcomingIndex = this.allCues.findIndex(
-        c => timeMs < c.startMs && (c.startMs - timeMs) <= 120,
+        c => timeMs < c.startMs && (c.startMs - timeMs) <= 125,
       );
       if (upcomingIndex !== -1) {
         cueIndex = upcomingIndex;
@@ -406,6 +449,11 @@ export class ContentOrchestrator {
           this.currentCueIndex = -1;
         }
       }
+    }
+
+    // 60FPS real-time spoken word karaoke highlight
+    if (this.currentCueIndex !== -1) {
+      this.overlay.updateActiveSpokenWord(effectiveTime);
     }
   }
 

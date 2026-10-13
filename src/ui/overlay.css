@@ -117,6 +117,16 @@
   pointer-events: none;
 }
 
+/* 60FPS Spoken Word Karaoke Highlighting */
+.cr-word.cr-speaking-word {
+  background: rgba(255, 255, 255, 0.28) !important;
+  border-radius: 4px !important;
+  text-shadow: 0 0 10px rgba(125, 249, 194, 0.8), 0 0 18px rgba(125, 249, 194, 0.4) !important;
+  transform: scale(1.06);
+  font-weight: 800 !important;
+  transition: background 0.08s ease, transform 0.08s ease;
+}
+
 /* ─── Blue Hover Balloon & Dictionary Popup (Parity with ref/image copy 5.png & image copy 6.png) ─── */
 .cr-hover-balloon {
   position: fixed;

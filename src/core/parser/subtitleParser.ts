@@ -3,7 +3,7 @@
 // Pure functions — no side effects, fully testable
 // ─────────────────────────────────────────────────
 
-import { SubtitleCue } from '../types';
+import { SubtitleCue, WordTiming } from '../types';
 
 /** Parse a timestamp string to milliseconds */
 function parseTimestamp(ts: string): number {
@@ -196,35 +196,128 @@ interface YouTubeJSON3Event {
 }
 
 export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
-  const cues: SubtitleCue[] = [];
+  if (!json.events || !Array.isArray(json.events)) return [];
 
-  if (!json.events) return cues;
+  // 1. First pass: extract raw events, word timings via Language Reactor's Se() algorithm,
+  // and clamp previous cue endMs if it overlaps the current cue startMs
+  interface RawParsedCue {
+    startMs: number;
+    endMs: number;
+    text: string;
+    wordTimings: WordTiming[];
+    aAppend?: number;
+  }
 
-  let cueIndex = 0;
+  const rawList: RawParsedCue[] = [];
+
   for (const event of json.events) {
-    // Skip non-text events (window styling, etc.)
     if (!event.segs || event.segs.length === 0) continue;
     if (event.tStartMs === undefined) continue;
 
     const startMs = event.tStartMs;
-    const endMs = startMs + (event.dDurationMs || 5000);
+    const duration = event.dDurationMs ?? 5000;
+    const endMs = startMs + duration;
 
-    // Concatenate all segments and decode HTML entities
-    const text = decodeHtmlEntities(
-      event.segs
-        .map(seg => seg.utf8)
-        .join('')
-        .replace(/\n/g, ' ')
-        .trim()
+    // Extract word segments with tOffsetMs (Language Reactor Se() parity)
+    const wordTimings: WordTiming[] = [];
+
+    for (let i = 0; i < event.segs.length; i++) {
+      const seg = event.segs[i];
+      const rawUtf8 = seg.utf8 || '';
+      const decoded = decodeHtmlEntities(rawUtf8).replace(/\n/g, ' ');
+      const clean = decoded.trim();
+      if (!clean) continue;
+
+      const segOffset = seg.tOffsetMs ?? 0;
+      const wStart = startMs + segOffset;
+      const nextSeg = event.segs[i + 1];
+      const nextStart = nextSeg?.tOffsetMs !== undefined ? startMs + nextSeg.tOffsetMs : undefined;
+      const wEnd = nextStart && nextStart > wStart ? nextStart : Math.min(endMs, wStart + 800);
+
+      wordTimings.push({
+        word: clean,
+        startMs: wStart,
+        endMs: Math.max(wStart + 100, wEnd),
+      });
+    }
+
+    const fullText = decodeHtmlEntities(
+      event.segs.map(s => s.utf8 || '').join('').replace(/\n/g, ' ').trim()
     );
 
-    if (text.length > 0 && text !== '\n') {
+    if (fullText.length === 0) continue;
+
+    // Strict Overlap Clamping (Language Reactor we() parity):
+    // prevCue.end > currentCue.start -> prevCue.end = currentCue.start
+    if (rawList.length > 0) {
+      const prev = rawList[rawList.length - 1];
+      if (prev.endMs > startMs) {
+        prev.endMs = startMs;
+      }
+    }
+
+    rawList.push({
+      startMs,
+      endMs,
+      text: fullText,
+      wordTimings,
+      aAppend: event.aAppend,
+    });
+  }
+
+  // 2. Second pass: Filter rolling ASR fragments and aAppend roll-offs
+  const filtered: RawParsedCue[] = [];
+  for (let i = 0; i < rawList.length; i++) {
+    const item = rawList[i];
+    const prev = filtered[filtered.length - 1];
+    const next = rawList[i + 1];
+
+    const isSingleWord = item.wordTimings.length <= 1 || item.text.split(/\s+/).length <= 1;
+
+    // Prune orphan roll-off fragments (e.g. "Canada.", "Ocean.", "The", "This", "video.")
+    // if the single word is already contained at the end of prev or start of next
+    if (isSingleWord && (item.aAppend === 1 || item.text.length < 15)) {
+      const normText = item.text.toLowerCase().replace(/[^a-z0-9]/gi, '');
+      const prevNorm = prev?.text.toLowerCase().replace(/[^a-z0-9]/gi, '') || '';
+      const nextNorm = next?.text.toLowerCase().replace(/[^a-z0-9]/gi, '') || '';
+
+      if (prevNorm.endsWith(normText) || nextNorm.startsWith(normText)) {
+        continue; // Skip orphan roll-off fragment!
+      }
+    }
+
+    filtered.push(item);
+  }
+
+  // 3. Third pass: Consolidate continuous rolling clauses (gap <= 10ms) matching Language Reactor we()
+  const cues: SubtitleCue[] = [];
+  let cueIdx = 0;
+
+  for (let i = 0; i < filtered.length; ) {
+    const cur = filtered[i];
+    const next = filtered[i + 1];
+
+    const isCurComplete = /[.!?]$/.test(cur.text.trim());
+
+    // If next exists, gap <= 10ms, and current is an incomplete clause, merge into a complete sentence (translate.pdf parity)
+    if (!isCurComplete && next && (next.startMs - cur.endMs <= 10)) {
       cues.push({
-        id: `yt-${cueIndex++}`,
-        startMs,
-        endMs,
-        text,
+        id: `yt-${cueIdx++}`,
+        startMs: cur.startMs,
+        endMs: next.endMs,
+        text: `${cur.text} ${next.text}`.trim(),
+        wordTimings: [...cur.wordTimings, ...next.wordTimings],
       });
+      i += 2;
+    } else {
+      cues.push({
+        id: `yt-${cueIdx++}`,
+        startMs: cur.startMs,
+        endMs: cur.endMs,
+        text: cur.text,
+        wordTimings: cur.wordTimings,
+      });
+      i += 1;
     }
   }
 

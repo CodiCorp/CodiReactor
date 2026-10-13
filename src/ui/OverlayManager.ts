@@ -26,6 +26,18 @@ export class OverlayManager {
   private isBalloonPinned = false;
   private balloonHideTimer: any = null;
   private activeWordSpan: HTMLElement | null = null;
+  private wordSpans: Array<{ span: HTMLElement; startMs: number; endMs: number }> = [];
+  private currentBalloonRequestId = 0;
+
+  /** Access shadow root (e.g. for testing and inspection) */
+  getShadowRoot(): ShadowRoot | null {
+    return this.shadowRoot;
+  }
+
+  /** Access host element */
+  getHostElement(): HTMLElement | null {
+    return this.hostElement;
+  }
 
   // Callbacks
   private onWordClick: ((word: string, lemma: string, element: HTMLElement) => void) | null = null;
@@ -117,8 +129,7 @@ export class OverlayManager {
           !(e.target as HTMLElement).classList?.contains('cr-word')) {
         this.hideDictPopup();
       }
-      if (this.hoverBalloon && !this.hoverBalloon.contains(e.target as Node) &&
-          !(e.target as HTMLElement).classList?.contains('cr-word')) {
+      if (this.hoverBalloon && !this.hoverBalloon.contains(e.target as Node)) {
         this.hideWordBalloon(true);
       }
     });
@@ -148,9 +159,10 @@ export class OverlayManager {
   renderTokens(tokens: EnrichedToken[], language: string = 'en'): void {
     if (!this.targetLine) return;
 
-    // Clear existing content
+    // Clear existing content and wordSpans
     this.targetLine.replaceChildren();
     this.targetLine.setAttribute('lang', language);
+    this.wordSpans = [];
 
     // Set text direction
     const isRTL = ['ar', 'he', 'fa', 'ur'].includes(language);
@@ -175,58 +187,88 @@ export class OverlayManager {
       const statusClass = `cr-${token.status}`;
       span.className = `cr-word ${statusClass}`;
 
-        if (token.outline) {
-          span.classList.add('cr-outline');
-        }
+      if (token.outline) {
+        span.classList.add('cr-outline');
+      }
 
-        span.setAttribute('tabindex', '0');
-        span.setAttribute('role', 'button');
-        span.setAttribute('aria-label', `${token.text} - ${token.status} word`);
-        span.dataset.word = token.cleanText;
-        span.dataset.lemma = token.lemma;
+      span.setAttribute('tabindex', '0');
+      span.setAttribute('role', 'button');
+      span.setAttribute('aria-label', `${token.text} - ${token.status} word`);
+      span.dataset.word = token.cleanText;
+      span.dataset.lemma = token.lemma;
 
-        if (this.isBalloonPinned && this.activeWordSpan && this.activeWordSpan.dataset.lemma === token.lemma) {
-          span.classList.add('cr-active-word');
-          this.activeWordSpan = span;
-        }
+      if (token.startMs !== undefined && token.endMs !== undefined) {
+        span.dataset.startMs = String(token.startMs);
+        span.dataset.endMs = String(token.endMs);
+        this.wordSpans.push({
+          span,
+          startMs: token.startMs,
+          endMs: token.endMs,
+        });
+      }
 
-        // Left-click: open blue dictionary window & pin it
-        span.addEventListener('click', (e) => {
-          e.stopPropagation();
+      if (this.isBalloonPinned && this.activeWordSpan && this.activeWordSpan.dataset.lemma === token.lemma) {
+        span.classList.add('cr-active-word');
+        this.activeWordSpan = span;
+      }
+
+      // Left-click: open blue dictionary window & pin it
+      span.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.showWordBalloon(token.cleanText, token.lemma, span, true);
+        this.onWordClick?.(token.cleanText, token.lemma, span);
+      });
+
+      // Hover: show blue dictionary balloon
+      span.addEventListener('mouseenter', () => {
+        this.showWordBalloon(token.cleanText, token.lemma, span, false);
+      });
+      span.addEventListener('mouseleave', () => {
+        this.scheduleHideBalloon();
+      });
+
+      // Right-click: mark word as learn (practice) & save to saved words
+      span.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.onWordRightClick?.(token.cleanText, token.lemma);
+        span.className = 'cr-word cr-learning cr-outline';
+        this.showWordBalloon(token.cleanText, token.lemma, span, true);
+      });
+
+      // Keyboard enter: open dictionary & pin
+      span.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
           this.showWordBalloon(token.cleanText, token.lemma, span, true);
           this.onWordClick?.(token.cleanText, token.lemma, span);
-        });
-
-        // Hover: show blue dictionary balloon
-        span.addEventListener('mouseenter', () => {
-          this.showWordBalloon(token.cleanText, token.lemma, span, false);
-        });
-        span.addEventListener('mouseleave', () => {
-          this.scheduleHideBalloon();
-        });
-
-        // Right-click: mark word as learn (practice) & save to saved words
-        span.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          this.onWordRightClick?.(token.cleanText, token.lemma);
-          span.className = 'cr-word cr-learning cr-outline';
-          this.showWordBalloon(token.cleanText, token.lemma, span, true);
-        });
-
-        // Keyboard enter: open dictionary & pin
-        span.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            this.showWordBalloon(token.cleanText, token.lemma, span, true);
-            this.onWordClick?.(token.cleanText, token.lemma, span);
-          }
-        });
+        }
+      });
       this.targetLine.appendChild(span);
     }
 
     // Show the subtitle box
     this.subtitleBox?.classList.remove('cr-hidden');
+  }
+
+  /**
+   * Update active spoken word highlight (karaoke style)
+   * Highlighting the active word at 60fps while keeping all words visible.
+   */
+  updateActiveSpokenWord(timeMs: number): void {
+    if (this.wordSpans.length === 0) return;
+    for (const item of this.wordSpans) {
+      const isSpeaking = timeMs >= item.startMs && timeMs < item.endMs;
+      if (isSpeaking) {
+        if (!item.span.classList.contains('cr-speaking-word')) {
+          item.span.classList.add('cr-speaking-word');
+        }
+      } else {
+        if (item.span.classList.contains('cr-speaking-word')) {
+          item.span.classList.remove('cr-speaking-word');
+        }
+      }
+    }
   }
 
   /**
@@ -403,7 +445,11 @@ export class OverlayManager {
       return; // Pinned card remains active during mouse movement
     }
 
+    // Immediately dismiss and destroy all existing balloons in Shadow DOM
     this.hideWordBalloon(true);
+
+    // Monotonic request ID guards against out-of-order async resolutions
+    const reqId = ++this.currentBalloonRequestId;
     this.isBalloonPinned = isPinned;
 
     if (this.activeWordSpan) {
@@ -415,14 +461,24 @@ export class OverlayManager {
     }
 
     const translations = await getQuickWordTranslation(word, 'ar');
-    if (!translations || translations.length === 0) return;
+    if (reqId !== this.currentBalloonRequestId || !this.shadowRoot) return;
+    if (!translations || translations.length === 0) {
+      anchor.classList.remove('cr-active-word');
+      return;
+    }
 
     // Ensure genuine Arabic translations
     const validTranslations = translations.filter((tr) => {
       const cleanTr = tr.trim();
       return cleanTr.length > 0 && cleanTr.toLowerCase() !== word.toLowerCase() && /[\u0600-\u06FF]/.test(cleanTr);
     });
-    if (validTranslations.length === 0) return;
+    if (validTranslations.length === 0) {
+      anchor.classList.remove('cr-active-word');
+      return;
+    }
+
+    // Sweep all existing balloon elements in Shadow DOM before creating new one
+    this.shadowRoot.querySelectorAll('.cr-hover-balloon').forEach(el => el.remove());
 
     this.hoverBalloon = document.createElement('div');
     this.hoverBalloon.className = 'cr-hover-balloon';
@@ -540,6 +596,7 @@ export class OverlayManager {
 
   private hideWordBalloon(force: boolean = false): void {
     if (this.isBalloonPinned && !force) return;
+    this.currentBalloonRequestId++;
     if (this.balloonHideTimer) {
       clearTimeout(this.balloonHideTimer);
       this.balloonHideTimer = null;
@@ -548,10 +605,10 @@ export class OverlayManager {
       this.activeWordSpan.classList.remove('cr-active-word');
       this.activeWordSpan = null;
     }
-    if (this.hoverBalloon) {
-      this.hoverBalloon.remove();
-      this.hoverBalloon = null;
+    if (this.shadowRoot) {
+      this.shadowRoot.querySelectorAll('.cr-hover-balloon').forEach(el => el.remove());
     }
+    this.hoverBalloon = null;
     this.isBalloonPinned = false;
   }
 
@@ -573,8 +630,9 @@ export class OverlayManager {
 
   /** Unmount and clean up */
   unmount(): void {
-    this.hideWordBalloon();
+    this.hideWordBalloon(true);
     this.hideLoadingToast();
+    this.wordSpans = [];
     this.hostElement?.remove();
     this.hostElement = null;
     this.shadowRoot = null;

@@ -32,6 +32,6 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
-ref/*.png
+ref/
 .empryo
 *.pdf

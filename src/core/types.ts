@@ -3,6 +3,13 @@
 // Shared type definitions used across all subsystems
 // ─────────────────────────────────────────────────
 
+/** Timing offset for an individual spoken word */
+export interface WordTiming {
+  word: string;
+  startMs: number;
+  endMs: number;
+}
+
 /** A single subtitle cue with timing and text */
 export interface SubtitleCue {
   id: string;
@@ -10,6 +17,7 @@ export interface SubtitleCue {
   endMs: number;
   text: string;
   translatedText?: string;
+  wordTimings?: WordTiming[];
 }
 
 /** CEFR proficiency level */
@@ -42,6 +50,10 @@ export interface EnrichedToken {
   isPunctuation: boolean;
   /** True if this is a whitespace segment */
   isWhitespace: boolean;
+  /** Start timestamp in ms for spoken word karaoke highlighting */
+  startMs?: number;
+  /** End timestamp in ms for spoken word karaoke highlighting */
+  endMs?: number;
 }
 
 /** Color palette for token statuses */

@@ -297,3 +297,73 @@ Hello SRT!`;
     expect(cues[1].text).toBe('Second line');
   });
 });
+
+// ─── Language Reactor Parity: TimedText Consolidation & wordTimings ───
+
+describe('Language Reactor Parity: parseJSON3 TimedText Consolidation', () => {
+  it('extracts wordTimings using segment tOffsetMs', () => {
+    const json = {
+      events: [
+        {
+          tStartMs: 1000,
+          dDurationMs: 3000,
+          segs: [
+            { utf8: 'Hello, ' },
+            { utf8: 'world!', tOffsetMs: 400 },
+          ],
+        },
+      ],
+    };
+
+    const cues = parseJSON3(json);
+    expect(cues).toHaveLength(1);
+    expect(cues[0].wordTimings).toBeDefined();
+    expect(cues[0].wordTimings).toHaveLength(2);
+    expect(cues[0].wordTimings![0].word).toBe('Hello,');
+    expect(cues[0].wordTimings![0].startMs).toBe(1000);
+    expect(cues[0].wordTimings![1].word).toBe('world!');
+    expect(cues[0].wordTimings![1].startMs).toBe(1400);
+  });
+
+  it('clamps previous cue endMs when it overlaps next cue startMs', () => {
+    const json = {
+      events: [
+        { tStartMs: 1000, dDurationMs: 4000, segs: [{ utf8: 'Sentence one.' }] },
+        { tStartMs: 3500, dDurationMs: 3000, segs: [{ utf8: 'Sentence two.' }] },
+      ],
+    };
+
+    const cues = parseJSON3(json);
+    expect(cues).toHaveLength(2);
+    expect(cues[0].endMs).toBe(3500); // Clamped from 5000 to 3500!
+  });
+
+  it('prunes rolling ASR orphan fragments (aAppend: 1 or single-word roll-offs)', () => {
+    const json = {
+      events: [
+        { tStartMs: 1000, dDurationMs: 2000, segs: [{ utf8: 'First of all, I was born in Vancouver, Canada.' }] },
+        { tStartMs: 3000, dDurationMs: 1000, aAppend: 1, segs: [{ utf8: 'Canada.' }] },
+        { tStartMs: 4000, dDurationMs: 2500, segs: [{ utf8: 'Vancouver is a city on the west coast of Canada.' }] },
+      ],
+    };
+
+    const cues = parseJSON3(json);
+    expect(cues).toHaveLength(2);
+    expect(cues.map(c => c.text)).not.toContain('Canada.');
+  });
+
+  it('consolidates continuous rolling clauses with gap <= 10ms matching translate.pdf', () => {
+    const json = {
+      events: [
+        { tStartMs: 1000, dDurationMs: 2000, segs: [{ utf8: 'Hello, hello, ' }] },
+        { tStartMs: 3005, dDurationMs: 2000, segs: [{ utf8: 'and welcome to today\'s video.' }] },
+      ],
+    };
+
+    const cues = parseJSON3(json);
+    expect(cues).toHaveLength(1);
+    expect(cues[0].text).toBe("Hello, hello, and welcome to today's video.");
+    expect(cues[0].startMs).toBe(1000);
+    expect(cues[0].endMs).toBe(5005);
+  });
+});
