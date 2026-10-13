@@ -125,4 +125,44 @@ describe('SidebarPanel Component', () => {
     expect(document.querySelector('#codireactor-sidebar-root')).toBeNull();
     expect(document.querySelector('.cr-vv-toggle-in-sidebar')).toBeNull();
   });
+
+  it('renders Arabic translation row in each cue card and highlights active card synchronously', () => {
+    sidebar = new SidebarPanel();
+    sidebar.mount();
+
+    sidebar.setCues([
+      {
+        id: 'cue-1',
+        startMs: 1000,
+        endMs: 3000,
+        text: 'Hello world',
+        translatedText: 'مرحبا بالعالم',
+      },
+      {
+        id: 'cue-2',
+        startMs: 3000,
+        endMs: 6000,
+        text: 'How are you',
+        translatedText: 'كيف حالك',
+      },
+    ]);
+
+    const container = sidebar.getElement()!;
+    const transRows = container.querySelectorAll('.cr-sidebar-trans-row');
+    expect(transRows.length).toBe(2);
+    expect(transRows[0].textContent).toBe('مرحبا بالعالم');
+    expect(transRows[1].textContent).toBe('كيف حالك');
+
+    // At 1500ms -> First row is active
+    sidebar.setActiveTime(1500);
+    const rows = container.querySelectorAll('.cr-sidebar-cue-row');
+    expect(rows[0].classList.contains('cr-active-row')).toBe(true);
+    expect(rows[1].classList.contains('cr-active-row')).toBe(false);
+
+    // At 3200ms -> Second row is active
+    sidebar.setActiveTime(3200);
+    expect(rows[0].classList.contains('cr-active-row')).toBe(false);
+    expect(rows[1].classList.contains('cr-active-row')).toBe(true);
+  });
 });
+

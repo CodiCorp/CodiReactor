@@ -366,4 +366,116 @@ describe('Language Reactor Parity: parseJSON3 TimedText Consolidation', () => {
     expect(cues[0].startMs).toBe(1000);
     expect(cues[0].endMs).toBe(5005);
   });
+
+  it('caps lingering ASR cue duration using fixedEnd (lastWord.startMs + 1300)', () => {
+    const json = {
+      events: [
+        {
+          tStartMs: 10000,
+          dDurationMs: 8000, // Lingering 8-second duration from raw YouTube ASR
+          segs: [
+            { utf8: 'I ', acAsrConf: 250, tOffsetMs: 0 },
+            { utf8: 'started ', acAsrConf: 250, tOffsetMs: 200 },
+            { utf8: 'posting.', acAsrConf: 250, tOffsetMs: 700 }, // Last word starts at 10700
+          ],
+        },
+      ],
+    };
+
+    const cues = parseJSON3(json);
+    expect(cues).toHaveLength(1);
+    // fixedEnd should cap 10000 + 8000 = 18000 down to 10700 + 1300 = 12000ms!
+    expect(cues[0].endMs).toBe(12000);
+  });
+
+  it('replicates translate.pdf vLijZb9BpkE sequence for 5:37, 5:40, 5:48', () => {
+    // Exact crawling events for vLijZb9BpkE
+    const json = {
+      events: [
+        // 5:37 (337000ms)
+        {
+          tStartMs: 337000,
+          dDurationMs: 2900,
+          segs: [
+            { utf8: 'this ', acAsrConf: 250, tOffsetMs: 0 },
+            { utf8: 'point. ', acAsrConf: 250, tOffsetMs: 350 },
+            { utf8: 'I ', acAsrConf: 250, tOffsetMs: 800 },
+            { utf8: 'started ', acAsrConf: 250, tOffsetMs: 1000 },
+            { utf8: 'posting ', acAsrConf: 250, tOffsetMs: 1400 },
+            { utf8: 'some ', acAsrConf: 250, tOffsetMs: 1800 },
+            { utf8: 'grammar ', acAsrConf: 250, tOffsetMs: 2100 },
+            { utf8: 'lessons,', acAsrConf: 250, tOffsetMs: 2500 },
+          ],
+        },
+        // 5:40 (340000ms) - continuous crawl pair (gap <= 10ms between part 1 and part 2)
+        {
+          tStartMs: 340000,
+          dDurationMs: 4000,
+          segs: [
+            { utf8: 'some ', acAsrConf: 250, tOffsetMs: 0 },
+            { utf8: 'tips ', acAsrConf: 250, tOffsetMs: 300 },
+            { utf8: 'and ', acAsrConf: 250, tOffsetMs: 600 },
+            { utf8: 'tricks ', acAsrConf: 250, tOffsetMs: 800 },
+            { utf8: 'on ', acAsrConf: 250, tOffsetMs: 1300 },
+            { utf8: 'uh ', acAsrConf: 250, tOffsetMs: 1600 },
+            { utf8: 'vocabulary, ', acAsrConf: 250, tOffsetMs: 1800 },
+          ],
+        },
+        {
+          tStartMs: 344005, // 5ms gap with previous cue (344005 - 344000 = 5ms <= 10ms) -> merged!
+          dDurationMs: 4000,
+          segs: [
+            { utf8: 'idioms, ', acAsrConf: 250, tOffsetMs: 0 },
+            { utf8: 'slang, ', acAsrConf: 250, tOffsetMs: 600 },
+            { utf8: 'that ', acAsrConf: 250, tOffsetMs: 1200 },
+            { utf8: 'kind ', acAsrConf: 250, tOffsetMs: 1500 },
+            { utf8: 'of ', acAsrConf: 250, tOffsetMs: 1800 },
+            { utf8: 'thing. ', acAsrConf: 250, tOffsetMs: 2000 },
+            { utf8: 'As', acAsrConf: 250, tOffsetMs: 2500 },
+          ],
+        },
+        // 5:48 (348100ms) - speech continues after short pause (gap > 10ms)
+        {
+          tStartMs: 348100,
+          dDurationMs: 5000,
+          segs: [
+            { utf8: "I'm ", acAsrConf: 250, tOffsetMs: 0 },
+            { utf8: 'sure ', acAsrConf: 250, tOffsetMs: 250 },
+            { utf8: 'you ', acAsrConf: 250, tOffsetMs: 500 },
+            { utf8: 'know, ', acAsrConf: 250, tOffsetMs: 700 },
+            { utf8: "you've ", acAsrConf: 250, tOffsetMs: 1100 },
+            { utf8: 'seen ', acAsrConf: 250, tOffsetMs: 1400 },
+            { utf8: 'my ', acAsrConf: 250, tOffsetMs: 1700 },
+            { utf8: 'videos, ', acAsrConf: 250, tOffsetMs: 1900 },
+            { utf8: 'probably. ', acAsrConf: 250, tOffsetMs: 2400 },
+            { utf8: 'If ', acAsrConf: 250, tOffsetMs: 2900 },
+            { utf8: 'this ', acAsrConf: 250, tOffsetMs: 3100 },
+            { utf8: 'is ', acAsrConf: 250, tOffsetMs: 3300 },
+            { utf8: 'your ', acAsrConf: 250, tOffsetMs: 3500 },
+            { utf8: 'first', acAsrConf: 250, tOffsetMs: 3800 },
+          ],
+        },
+      ],
+    };
+
+    const cues = parseJSON3(json);
+    expect(cues).toHaveLength(3);
+
+    // Cue 1: 5:37
+    expect(cues[0].startMs).toBe(337000);
+    expect(cues[0].text).toBe('this point. I started posting some grammar lessons,');
+
+    // Cue 2: 5:40 (consolidated pair)
+    expect(cues[1].startMs).toBe(340000);
+    expect(cues[1].text).toBe(
+      'some tips and tricks on uh vocabulary, idioms, slang, that kind of thing. As'
+    );
+
+    // Cue 3: 5:48
+    expect(cues[2].startMs).toBe(348100);
+    expect(cues[2].text).toBe(
+      "I'm sure you know, you've seen my videos, probably. If this is your first"
+    );
+  });
 });
+

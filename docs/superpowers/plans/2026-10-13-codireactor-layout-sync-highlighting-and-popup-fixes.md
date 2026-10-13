@@ -283,7 +283,7 @@ _e(e) { if (!ue.props.interactive || !Y.contains(e.target)) ue.hide(); }
 
 - [x] **Step 1: Execute Vitest unit test suite**
   - Command: `npm test`
-  - Verify all 261 tests pass with zero failures.
+  - Verify all 268 tests pass with zero failures.
 
 - [x] **Step 2: Execute extension & web app builds**
   - Command: `npm run build:ext` and `npm run build:web`
@@ -291,3 +291,152 @@ _e(e) { if (!ue.props.interactive || !Y.contains(e.target)) ue.hide(); }
 
 - [x] **Step 3: Push commits to remote**
   - `git push origin personal/main`
+
+---
+
+## 🚀 Phase 2: Language Reactor Semantic Parity, 100% Native Highlighting Sync & Larger Typography
+
+### Task 6: Semantic Sentiment Segmentation Architecture (`translate.pdf` Parity)
+
+**Root Cause:**
+YouTube ASR captions emit rolling 2-line windows with large durations (~4–5s). Without Language Reactor's exact `fixedEnd` calculation and ASR clause pairing, sentences split incorrectly (e.g. `this point.` separated from `I started posting some grammar lessons,`) or merge arbitrarily with following clauses (`some tips and tricks`), causing semantic misalignment and delayed transitions.
+
+**LR Blueprint (`pageScript_lly.min.js:1296339`):**
+```js
+// fixedEnd caps lingering YouTube ASR duration to 1.3s after final spoken syllable:
+let s = Math.min(r, lastWord.start_ms + 1300);
+// Overlap clamping prevents earlier cues from lingering into new ones:
+if (prev.end > i) prev.end = i;
+if (prev.fixedEnd !== undefined && prev.fixedEnd > i) prev.fixedEnd = i;
+// Clause consolidation merges crawling events when gap <= 10ms:
+if (e[n+1] && !(e[n+1].begin - e[n].end > 10)) {
+  a = { begin: e[n].begin, end: e[n+1].fixedEnd || e[n+1].end, text: e[n].text + " " + e[n+1].text };
+  n += 2;
+}
+```
+
+- [x] **Step 1: Write unit tests in `tests/subtitleParser.test.ts`**
+  - Test `translate.pdf` sequence for video `vLijZb9BpkE`:
+    - Cue 1 (5:37): `this point. I started posting some grammar lessons,`
+    - Cue 2 (5:40): `some tips and tricks on uh vocabulary, idioms, slang, that kind of thing. As`
+    - Cue 3 (5:48): `I'm sure you know, you've seen my videos, probably. If this is your first`
+  - Assert that `fixedEnd` caps duration at `lastWord.startMs + 1300`.
+  - Assert that continuous crawling events (`gap <= 10ms`) merge into consolidated 2-clause sentences without requiring sentence terminator punctuation.
+
+- [x] **Step 2: Implement LR `we()` and `Se()` in `src/core/parser/subtitleParser.ts`**
+  - Implement exact `fixedEnd` computation on ASR events.
+  - Implement boundary clamping across all adjacent cues (`prev.endMs = Math.min(prev.endMs, current.startMs)`).
+  - Implement unconditional clause pair merging for `gap <= 10ms`.
+  - Carry through `wordTimings` for each word with clamped end boundaries.
+
+- [x] **Step 3: Run Vitest to verify pass**
+  - Command: `npx vitest run tests/subtitleParser.test.ts`
+
+---
+
+### Task 7: 100% Real-Time Word & Subtitle Synchronization (Eliminate 1.0–1.5s Delay)
+
+**Root Cause:**
+In `ContentOrchestrator.ts:handleTimeUpdate`, the active cue lookup was:
+`c => effectiveTime >= c.startMs && timeMs <= c.endMs`
+Because `timeMs` (without lead) was checked against `c.endMs`, when a new cue started, the orchestrator stayed locked to the old cue until `timeMs` caught up to `c.endMs` (1.0–1.5s delay). Additionally, single words in `OverlayManager.ts` lacked tight timing bounds.
+
+**LR Blueprint (`pageScript_lly.min.js:1798345` `A(subtitles, timeMs)`):**
+```js
+// Active cue search uses effectiveTime across BOTH bounds:
+function A(e, t) {
+  for (let a = 0; a < e.subtitles.length; a++) {
+    let n = e.subtitles[a];
+    if (n.end > t && n.begin <= t) return a;
+    if (n.begin > t) break;
+  }
+  return "TRANSIT";
+}
+```
+
+- [x] **Step 1: Write unit tests in `tests/overlayManager.test.ts`**
+  - Verify instantaneous cue transition at `startMs - 125ms` with zero lag.
+  - Verify active spoken word karaoke highlights strictly when `effectiveTime` is within `[word.startMs, word.endMs]`.
+  - Verify that the previous cue's word highlight is completely purged when moving to the next cue.
+
+- [x] **Step 2: Update `ContentOrchestrator.ts` & `OverlayManager.ts`**
+  - In `ContentOrchestrator.ts`:
+    - Apply LR's search algorithm where `cue.startMs <= effectiveTime && effectiveTime < cue.endMs`.
+    - Instantaneously switch cues as soon as `effectiveTime` hits `nextCue.startMs`.
+    - Hold previous cue during transit gaps for up to 400ms before clearing.
+    - Pass `effectiveTime` to `updateActiveSpokenWord(effectiveTime)`.
+  - In `OverlayManager.ts`:
+    - Clamp word span intervals tightly: `wEnd = nextWord ? Math.min(wStart + 500, nextWord.startMs) : Math.min(cue.endMs, wStart + 400)`.
+    - Toggle `.cr-speaking-word` on active spoken word, removing from all other words.
+
+- [x] **Step 3: Run Vitest to verify pass**
+  - Command: `npx vitest run tests/overlayManager.test.ts`
+
+---
+
+### Task 8: In-Player Subtitle Typography & Prominence Enlargement
+
+**Goal:**
+Enlarge in-player subtitle text significantly so that it matches the prominence and scale of native YouTube subtitles (`~28px - 34px`), with crisp Arabic translation and luminous word karaoke glow.
+
+- [x] **Step 1: Update `src/ui/overlay.css`**
+  - Enlarge `.cr-subtitle-target`:
+    - `font-size: clamp(1.65rem, 2.6vw, 2.15rem);` (~30px–34px).
+    - `font-weight: 700;`
+    - `line-height: 1.35;`
+    - `text-shadow: 0 2px 8px rgba(0, 0, 0, 0.98), 0 0 4px rgba(0, 0, 0, 0.98);`
+  - Enlarge `.cr-subtitle-translation`:
+    - `font-size: clamp(1.25rem, 1.9vw, 1.55rem);` (~22px–25px).
+    - `font-weight: 600;`
+    - `margin-top: 6px;`
+    - `text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95);`
+  - Enhance `.cr-word.cr-speaking-word`:
+    - `background: rgba(255, 255, 255, 0.32) !important;`
+    - `text-shadow: 0 0 12px rgba(125, 249, 194, 0.95), 0 0 22px rgba(125, 249, 194, 0.5) !important;`
+    - `transform: scale(1.08);`
+    - `font-weight: 800 !important;`
+  - Enhance `.cr-subtitle-box`:
+    - `padding: 8px 22px;`
+    - `bottom: 42px;`
+    - `border-radius: 8px;`
+
+---
+
+### Task 9: Right Sidebar Transcript Translation Rows & Organization
+
+**Goal:**
+Organize the right-side transcript panel cards so that each card displays both the English sentence (with CEFR token colors) and its corresponding Arabic translation below it, exactly like Language Reactor and `translate.pdf`.
+
+- [x] **Step 1: Update `src/ui/SidebarPanel.ts`**
+  - In `renderCues()`, append an Arabic translation container (`.cr-sidebar-trans-row`) below `textWrapper` in each card.
+  - If `cue.translatedText` is available, render immediately.
+  - If not yet available, trigger asynchronous sentence translation and populate smoothly.
+  - Update `setActiveTime(timeMs)` to use crisp boundary checking (`timeMs >= c.startMs && timeMs < c.endMs`).
+
+- [x] **Step 2: Update unit tests in `tests/sidebarPanel.test.ts`**
+  - Verify translation lines render in transcript rows.
+  - Verify active card highlights synchronously without lingering.
+
+---
+
+### Task 10: MAIN World Official JSON3 Interception & `pot` Extraction
+
+**Goal:**
+Ensure CodiReactor always acquires official YouTube JSON3 caption tracks with complete `tOffsetMs` word timings across all videos.
+
+- [ ] **Step 1: Update `src/adapters/YouTubeAdapter.ts`**
+  - In `injectFetchProxy()`, capture `pot` ("proof of origin token") from `/timedtext?` requests.
+  - In `probeOfficialTracks()`, fetch `track.baseUrl + '&fmt=json3'` directly from the MAIN world context (passing `&c=WEB&pot=` if captured).
+  - Relay the parsed JSON3 cues immediately via `CR_SUBTITLE_DATA`.
+  - In `video.textTracks` fallback: apply strict overlap clamping, clause pairing, and syllable-spaced word timings.
+
+---
+
+### Task 11: End-to-End Verification & Builds
+
+- [ ] **Step 1: Execute Vitest test suite**
+  - `npm test` (all tests passing).
+- [ ] **Step 2: Build extension and web artifacts**
+  - `npm run build:ext` and `npm run build:web`.
+- [ ] **Step 3: Update `PROJECT_STATE_MEMORY.md` and commit**
+

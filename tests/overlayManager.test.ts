@@ -129,6 +129,57 @@ describe('OverlayManager - 60FPS Spoken Word Highlighting (Karaoke Style)', () =
     // Subtitles remain completely intact
     expect(wordSpans.length).toBe(2);
   });
+
+  it('clears all active spoken word highlights immediately when a new cue is rendered', () => {
+    const tokensCue1: EnrichedToken[] = [
+      {
+        text: 'First',
+        cleanText: 'first',
+        lemma: 'first',
+        pos: 'adj',
+        frequencyRank: 50,
+        cefrLevel: 'A1',
+        status: 'known',
+        color: '#7df9c2',
+        outline: false,
+        isPunctuation: false,
+        isWhitespace: false,
+        startMs: 1000,
+        endMs: 1500,
+      },
+    ];
+
+    manager.renderTokens(tokensCue1, 'en');
+    manager.updateActiveSpokenWord(1200);
+
+    const shadow = manager.getShadowRoot()!;
+    let spans = shadow.querySelectorAll('.cr-word');
+    expect(spans[0].classList.contains('cr-speaking-word')).toBe(true);
+
+    // Transition to Cue 2
+    const tokensCue2: EnrichedToken[] = [
+      {
+        text: 'Second',
+        cleanText: 'second',
+        lemma: 'second',
+        pos: 'adj',
+        frequencyRank: 60,
+        cefrLevel: 'A1',
+        status: 'known',
+        color: '#7df9c2',
+        outline: false,
+        isPunctuation: false,
+        isWhitespace: false,
+        startMs: 1600,
+        endMs: 2000,
+      },
+    ];
+
+    manager.renderTokens(tokensCue2, 'en');
+    spans = shadow.querySelectorAll('.cr-word');
+    expect(spans[0].textContent).toBe('Second');
+    expect(spans[0].classList.contains('cr-speaking-word')).toBe(false);
+  });
 });
 
 describe('OverlayManager - Atomic Singleton Balloon Lifecycle (No Stuck Popups)', () => {

@@ -381,7 +381,17 @@ export class SidebarPanel {
   setActiveTime(timeMs: number): void {
     if (this.cues.length === 0 || !this.cueListEl) return;
 
-    const newIndex = this.cues.findIndex(c => timeMs >= c.startMs && timeMs <= c.endMs);
+    const effectiveTime = timeMs + 125;
+    let newIndex = -1;
+    for (let i = 0; i < this.cues.length; i++) {
+      const c = this.cues[i];
+      if (effectiveTime >= c.startMs && effectiveTime < c.endMs) {
+        newIndex = i;
+        break;
+      }
+      if (c.startMs > effectiveTime) break;
+    }
+
     if (newIndex !== -1 && newIndex !== this.activeCueIndex) {
       this.activeCueIndex = newIndex;
       this.highlightActiveCue(newIndex);
@@ -415,7 +425,7 @@ export class SidebarPanel {
         playIcon.style.visibility = 'visible';
         playIcon.style.opacity = '1';
       }
-      targetRow.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+      targetRow.scrollIntoView?.({ block: 'nearest', behavior: 'auto' });
     }
   }
 
@@ -581,6 +591,32 @@ export class SidebarPanel {
 
         textWrapper.appendChild(wordSpan);
       }
+
+      // 2b. Arabic sentence translation row (matching translate.pdf and Language Reactor)
+      const transRow = document.createElement('div');
+      transRow.className = 'cr-sidebar-trans-row';
+      transRow.style.cssText = `
+        font-size: 12.5px !important;
+        line-height: 1.4 !important;
+        color: #9ca3af !important;
+        margin-top: 4px !important;
+        direction: rtl !important;
+        text-align: right !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Cairo", "Noto Sans Arabic", sans-serif !important;
+        word-break: break-word !important;
+      `;
+
+      if (cue.translatedText) {
+        transRow.textContent = cue.translatedText;
+      } else {
+        getSentenceTranslation(cue.text, 'ar').then((trans) => {
+          if (trans) {
+            cue.translatedText = trans;
+            transRow.textContent = trans;
+          }
+        });
+      }
+      textWrapper.appendChild(transRow);
 
       // 3. Hover Actions: Bookmark Star ☆ and More ⋮
       const actionsWrapper = document.createElement('div');

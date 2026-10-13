@@ -422,18 +422,21 @@ export class ContentOrchestrator {
     // Language Reactor 125ms audio lead offset (S = 125ms)
     const effectiveTime = timeMs + 125;
 
-    // Find the active cue for this timestamp
-    let cueIndex = this.allCues.findIndex(
-      c => effectiveTime >= c.startMs && timeMs <= c.endMs,
-    );
-
-    // If between cues, check if we are within 125ms before upcoming cue for seamless sync
-    if (cueIndex === -1) {
-      const upcomingIndex = this.allCues.findIndex(
-        c => timeMs < c.startMs && (c.startMs - timeMs) <= 125,
-      );
-      if (upcomingIndex !== -1) {
-        cueIndex = upcomingIndex;
+    // Fast linear search for the active cue (Language Reactor A() parity)
+    // Uses effectiveTime across both boundaries to eliminate the 1.0-1.5s transition lag
+    let cueIndex = -1;
+    for (let i = 0; i < this.allCues.length; i++) {
+      const c = this.allCues[i];
+      if (effectiveTime >= c.startMs && effectiveTime < c.endMs) {
+        cueIndex = i;
+        break;
+      }
+      if (c.startMs > effectiveTime) {
+        // If within 50ms of upcoming cue, activate slightly early for seamless transition
+        if (c.startMs - effectiveTime <= 50) {
+          cueIndex = i;
+        }
+        break;
       }
     }
 
@@ -441,11 +444,11 @@ export class ContentOrchestrator {
       this.currentCueIndex = cueIndex;
       this.processCue(this.allCues[cueIndex]);
     } else if (cueIndex === -1) {
-      // Between cues — clear display after 400ms pause
+      // Between cues — clear display after 400ms pause (Language Reactor transit hold)
       const lastActive = this.currentCueIndex;
       if (lastActive !== -1) {
         const lastCue = this.allCues[lastActive];
-        if (lastCue && timeMs > lastCue.endMs + 400) {
+        if (lastCue && effectiveTime > lastCue.endMs + 400) {
           this.overlay.clearSubtitles();
           this.currentCueIndex = -1;
         }

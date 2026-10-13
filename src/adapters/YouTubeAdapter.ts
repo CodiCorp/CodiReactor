@@ -7,6 +7,7 @@
 import { BasePlatformAdapter, AdapterCapabilities } from './BasePlatformAdapter';
 import { SubtitleCue, CaptionTrack, LanguageOption } from '../core/types';
 import { parseJSON3, parseVTT, parseYouTubeXML, autoParseSubtitles } from '../core/parser/subtitleParser';
+import { cleanSubtitleText } from '../core/parser/sentenceSegmenter';
 
 // YouTube DOM selectors (stable across YouTube updates)
 const SELECTORS = {
@@ -310,16 +311,55 @@ export class YouTubeAdapter extends BasePlatformAdapter {
           track.mode = 'hidden';
         }
         if (track.cues && track.cues.length > 0) {
-          const cues: SubtitleCue[] = [];
+          const rawCues: SubtitleCue[] = [];
           for (let i = 0; i < track.cues.length; i++) {
             const cue = track.cues[i] as VTTCue;
-            cues.push({
+            const text = cleanSubtitleText(cue.text.replace(/<[^>]+>/g, ''));
+            if (!text) continue;
+            rawCues.push({
               id: `yt-track-${i}`,
-              startMs: cue.startTime * 1000,
-              endMs: cue.endTime * 1000,
-              text: cue.text.replace(/<[^>]+>/g, ''),
+              startMs: Math.round(cue.startTime * 1000),
+              endMs: Math.round(cue.endTime * 1000),
+              text,
             });
           }
+
+          // Sort and clamp overlaps (Language Reactor parity)
+          rawCues.sort((a, b) => a.startMs - b.startMs);
+          for (let i = 1; i < rawCues.length; i++) {
+            const prev = rawCues[i - 1];
+            const cur = rawCues[i];
+            if (prev.endMs > cur.startMs) {
+              prev.endMs = cur.startMs;
+            }
+          }
+
+          // Merge continuous crawling clauses (gap <= 10ms)
+          const cues: SubtitleCue[] = [];
+          for (let i = 0; i < rawCues.length; ) {
+            const cur = rawCues[i];
+            const next = rawCues[i + 1];
+            const isCurComplete = /[.!?]$/.test(cur.text.trim());
+            const hasNext = !!next;
+            const isGapSmall = hasNext && (next.startMs - cur.endMs <= 10);
+
+            if (!isCurComplete && hasNext && isGapSmall) {
+              cues.push({
+                id: `yt-track-${cues.length}`,
+                startMs: cur.startMs,
+                endMs: next.endMs,
+                text: `${cur.text} ${next.text}`.trim(),
+              });
+              i += 2;
+            } else {
+              cues.push({
+                ...cur,
+                id: `yt-track-${cues.length}`,
+              });
+              i += 1;
+            }
+          }
+
           if (cues.length > 0) {
             this.hasAuthoritativeCaptions = true;
             // Kill DOM observer — TextTrack is authoritative
@@ -480,6 +520,19 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       (function() {
         const NONCE = '${this.fetchProxyNonce}';
         const originalFetch = window.fetch;
+        let potTokens = {};
+
+        function capturePot(url) {
+          if (!url || typeof url !== 'string') return;
+          if (url.includes('/timedtext?') || url.includes('/api/timedtext')) {
+            try {
+              const u = new URL(url, window.location.href);
+              const pot = u.searchParams.get('pot');
+              const v = u.searchParams.get('v');
+              if (pot && v) potTokens[v] = pot;
+            } catch (_) {}
+          }
+        }
 
         function relaySubtitle(url, body) {
           if (!body) return;
@@ -494,6 +547,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         // Intercept window.fetch
         window.fetch = function(...args) {
           const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+          capturePot(url);
           
           if (url.includes('/api/timedtext') || url.includes('timedtext?')) {
             return originalFetch.apply(this, args).then(response => {
@@ -512,6 +566,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
         const origXhrOpen = XMLHttpRequest.prototype.open;
         const origXhrSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+          capturePot(url);
           this._crTimedTextUrl = typeof url === 'string' && (url.includes('/api/timedtext') || url.includes('timedtext?')) ? url : null;
           return origXhrOpen.call(this, method, url, ...rest);
         };
@@ -526,8 +581,8 @@ export class YouTubeAdapter extends BasePlatformAdapter {
           return origXhrSend.apply(this, args);
         };
 
-        // Probe official playerResponse caption tracks
-        function probeOfficialTracks() {
+        // Probe official playerResponse caption tracks & proactively fetch JSON3
+        async function probeOfficialTracks() {
           try {
             const player = document.querySelector('#movie_player');
             const resp = player?.getPlayerResponse?.() || window.ytInitialPlayerResponse;
@@ -538,6 +593,26 @@ export class YouTubeAdapter extends BasePlatformAdapter {
                 type: 'CR_OFFICIAL_TRACKS_AVAILABLE',
                 payload: { captionTracks }
               }, '*');
+
+              // Proactively fetch official JSON3 in MAIN world
+              const track = captionTracks.find(t => t.languageCode === 'en' || t.vssId?.includes('en')) || captionTracks[0];
+              if (track?.baseUrl) {
+                let fetchUrl = track.baseUrl.includes('fmt=') ? track.baseUrl : track.baseUrl + '&fmt=json3';
+                try {
+                  const u = new URL(fetchUrl, window.location.href);
+                  const v = u.searchParams.get('v');
+                  if (v && potTokens[v] && !fetchUrl.includes('&pot=')) {
+                    fetchUrl += '&c=WEB&pot=' + encodeURIComponent(potTokens[v]);
+                  }
+                  const res = await originalFetch(fetchUrl, { credentials: 'include' });
+                  if (res.ok) {
+                    const text = await res.text();
+                    if (text && text.trim().startsWith('{')) {
+                      relaySubtitle(fetchUrl, text);
+                    }
+                  }
+                } catch (_) {}
+              }
             }
           } catch (_) {}
         }

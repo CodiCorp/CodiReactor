@@ -199,10 +199,13 @@ export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
   if (!json.events || !Array.isArray(json.events)) return [];
 
   // 1. First pass: extract raw events, word timings via Language Reactor's Se() algorithm,
-  // and clamp previous cue endMs if it overlaps the current cue startMs
+  // and compute fixedEnd (Math.min(r, lastWord.start_ms + 1300)) for ASR events.
   interface RawParsedCue {
     startMs: number;
     endMs: number;
+    rawEnd: number;
+    fixedEnd?: number;
+    isASR: boolean;
     text: string;
     wordTimings: WordTiming[];
     aAppend?: number;
@@ -216,7 +219,10 @@ export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
 
     const startMs = event.tStartMs;
     const duration = event.dDurationMs ?? 5000;
-    const endMs = startMs + duration;
+    const r = startMs + duration;
+
+    // Check if this is an ASR (auto-generated) track
+    const isASR = event.segs.some(s => 'acAsrConf' in s);
 
     // Extract word segments with tOffsetMs (Language Reactor Se() parity)
     const wordTimings: WordTiming[] = [];
@@ -230,15 +236,38 @@ export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
 
       const segOffset = seg.tOffsetMs ?? 0;
       const wStart = startMs + segOffset;
-      const nextSeg = event.segs[i + 1];
-      const nextStart = nextSeg?.tOffsetMs !== undefined ? startMs + nextSeg.tOffsetMs : undefined;
-      const wEnd = nextStart && nextStart > wStart ? nextStart : Math.min(endMs, wStart + 800);
 
       wordTimings.push({
         word: clean,
         startMs: wStart,
-        endMs: Math.max(wStart + 100, wEnd),
+        endMs: wStart + 350, // Temporary until clamped below
       });
+    }
+
+    if (wordTimings.length === 0) continue;
+
+    // Language Reactor fixedEnd computation:
+    // Caps lingering YouTube ASR duration to 1.3s after the final spoken syllable
+    let fixedEnd: number | undefined;
+    if (isASR && wordTimings.length > 0) {
+      const lastWord = wordTimings[wordTimings.length - 1];
+      if (wordTimings.length > 2) {
+        const secondLast = wordTimings[wordTimings.length - 2];
+        lastWord.startMs = Math.min(secondLast.startMs + 1300, lastWord.startMs);
+      }
+      fixedEnd = Math.min(r, lastWord.startMs + 1300);
+    }
+
+    const effectiveEnd = fixedEnd !== undefined ? fixedEnd : r;
+
+    // Clamp word timing boundaries tightly so spoken words never linger
+    for (let i = 0; i < wordTimings.length; i++) {
+      const curW = wordTimings[i];
+      const nextW = wordTimings[i + 1];
+      const wEnd = nextW && nextW.startMs > curW.startMs
+        ? Math.min(curW.startMs + 600, nextW.startMs)
+        : Math.min(effectiveEnd, curW.startMs + 400);
+      curW.endMs = Math.max(curW.startMs + 100, wEnd);
     }
 
     const fullText = decodeHtmlEntities(
@@ -247,18 +276,29 @@ export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
 
     if (fullText.length === 0) continue;
 
+    let rawEnd = r;
+
     // Strict Overlap Clamping (Language Reactor we() parity):
     // prevCue.end > currentCue.start -> prevCue.end = currentCue.start
     if (rawList.length > 0) {
       const prev = rawList[rawList.length - 1];
+      if (prev.rawEnd > startMs) {
+        prev.rawEnd = startMs;
+      }
       if (prev.endMs > startMs) {
         prev.endMs = startMs;
+      }
+      if (prev.fixedEnd !== undefined && prev.fixedEnd > startMs) {
+        prev.fixedEnd = startMs;
       }
     }
 
     rawList.push({
       startMs,
-      endMs,
+      endMs: effectiveEnd,
+      rawEnd,
+      fixedEnd,
+      isASR,
       text: fullText,
       wordTimings,
       aAppend: event.aAppend,
@@ -297,14 +337,18 @@ export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
     const cur = filtered[i];
     const next = filtered[i + 1];
 
+    // Language Reactor combines crawling pairs for ASR tracks, or non-terminal clauses for manual tracks
     const isCurComplete = /[.!?]$/.test(cur.text.trim());
+    const canCombine = cur.isASR ? true : !isCurComplete;
+    const hasNext = !!next;
+    const isGapSmall = hasNext && (next.startMs - cur.rawEnd <= 10);
 
-    // If next exists, gap <= 10ms, and current is an incomplete clause, merge into a complete sentence (translate.pdf parity)
-    if (!isCurComplete && next && (next.startMs - cur.endMs <= 10)) {
+    // If next exists, gap <= 10ms, and track is ASR, consolidate crawling events into a 2-clause sentence (translate.pdf parity)
+    if (canCombine && hasNext && isGapSmall) {
       cues.push({
         id: `yt-${cueIdx++}`,
         startMs: cur.startMs,
-        endMs: next.endMs,
+        endMs: next.fixedEnd !== undefined ? next.fixedEnd : next.endMs,
         text: `${cur.text} ${next.text}`.trim(),
         wordTimings: [...cur.wordTimings, ...next.wordTimings],
       });
@@ -313,7 +357,7 @@ export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
       cues.push({
         id: `yt-${cueIdx++}`,
         startMs: cur.startMs,
-        endMs: cur.endMs,
+        endMs: cur.fixedEnd !== undefined ? cur.fixedEnd : cur.endMs,
         text: cur.text,
         wordTimings: cur.wordTimings,
       });
