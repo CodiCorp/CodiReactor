@@ -75,7 +75,11 @@ export class YouTubeSearchInject {
     // Logo / Brand
     const brand = document.createElement('div');
     brand.style.cssText = 'font-weight: 600; color: #60a5fa; display: flex; align-items: center; gap: 6px;';
-    brand.innerHTML = `<span>⚡</span> <span>CodiReactor Search</span>`;
+    const brandIcon = document.createElement('span');
+    brandIcon.textContent = '⚡';
+    const brandText = document.createElement('span');
+    brandText.textContent = 'CodiReactor Search';
+    brand.append(brandIcon, brandText);
     bar.appendChild(brand);
 
     // CC Filter Button

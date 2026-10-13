@@ -138,4 +138,24 @@ describe('buildDictionaryPopup', () => {
     const wordEl = popup.querySelector('.cr-dict-word');
     expect(wordEl?.textContent).toBe('No definition found');
   });
+
+  it('renders CodiReactor brand title and calls onClose when close button clicked', () => {
+    const onClose = vi.fn();
+    const popup = buildDictionaryPopup({
+      entry: null,
+      externalLinks: [],
+      currentStatus: 'suggested',
+      onClose,
+    });
+
+    const brandEl = popup.querySelector('.cr-dict-brand-title');
+    expect(brandEl?.textContent).toBe('CodiReactor');
+
+    const closeBtn = popup.querySelector('.cr-dict-close-btn') as HTMLButtonElement;
+    expect(closeBtn).toBeTruthy();
+    expect(closeBtn.textContent).toBe('✖');
+
+    closeBtn.click();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
 });

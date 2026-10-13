@@ -19,6 +19,7 @@ import { SidebarPanel } from './SidebarPanel';
 import { FirstRunModal } from './FirstRunModal';
 import { lookupWord } from '../services/dictionaryService';
 import { getSentenceTranslation } from '../services/quickTranslation';
+import { consolidateAndSegmentCues } from '../core/parser/sentenceSegmenter';
 import { SubtitleCue, EnrichedToken } from '../core/types';
 
 /**
@@ -76,6 +77,8 @@ export class ContentOrchestrator {
       onWordRightClick: (word, lemma) => this.handleWordRightClick(word, lemma),
       onSeekPrev: () => this.seekToPrevCue(),
       onSeekNext: () => this.seekToNextCue(),
+      onReplayCurrent: () => this.replayCurrentCue(),
+      onSaveCurrent: () => this.saveCurrentSubtitle(),
     });
 
     // Set up overlay controls
@@ -119,7 +122,11 @@ export class ContentOrchestrator {
     // Mount interactive right-side transcript sidebar (Screenshots 093356, 093424, 093439, 093511)
     if (typeof document !== 'undefined') {
       this.sidebar = new SidebarPanel({
-        onSeek: (timeMs) => this.adapter?.seekTo(timeMs),
+        onSeek: (timeMs) => {
+          this.adapter?.seekTo(timeMs);
+          const video = this.adapter?.getVideoElement();
+          if (video && video.paused) video.play();
+        },
         onWordClick: (word, lemma, el) => this.handleWordClick(word, lemma, el),
         onPauseVideo: () => {
           const video = this.adapter?.getVideoElement();
@@ -158,7 +165,7 @@ export class ContentOrchestrator {
     const tracks = await this.adapter.extractCaptions();
     if (tracks.length > 0 && tracks[0].cues.length > 0) {
       this.overlay.hideLoadingToast();
-      this.allCues = tracks[0].cues;
+      this.allCues = consolidateAndSegmentCues(tracks[0].cues);
       this.language = tracks[0].language;
       this.sidebar?.setCues(this.allCues);
     }
@@ -204,26 +211,20 @@ export class ContentOrchestrator {
     if (!this.isEnabled) return;
     this.overlay.hideLoadingToast();
 
-    // Merge or replace cues
-    if (cues.length > 10) {
-      // Full track update
-      this.allCues = cues;
+    // Consolidate & segment rolling ASR stream into discrete, deduplicated sentences
+    if (cues.length > 5) {
+      this.allCues = consolidateAndSegmentCues(cues);
     } else {
-      // Incremental update (live DOM observation)
-      for (const cue of cues) {
-        if (!this.allCues.some(c => c.text === cue.text && Math.abs(c.startMs - cue.startMs) < 500)) {
-          this.allCues.push(cue);
-        }
-      }
+      this.allCues = consolidateAndSegmentCues([...this.allCues, ...cues]);
     }
 
     // Update sidebar transcript
     this.sidebar?.setCues(this.allCues);
 
-    // Process the latest cue
-    if (cues.length > 0) {
-      this.processCue(cues[cues.length - 1]);
-    }
+    // Sync active cue with current video position
+    const video = this.adapter?.getVideoElement();
+    const currentTimeMs = video ? Math.round(video.currentTime * 1000) : 0;
+    this.handleTimeUpdate(currentTimeMs);
   }
 
   private processCue(cue: SubtitleCue): void {
@@ -321,6 +322,7 @@ export class ContentOrchestrator {
       entry: result.entry,
       externalLinks: result.externalLinks,
       currentStatus: status,
+      onClose: () => this.overlay.hideDictPopup(),
       onMarkKnown: () => {
         this.vocab.knownWords.add(lemma);
         this.vocab.learningWords.delete(lemma);
@@ -393,9 +395,11 @@ export class ContentOrchestrator {
   }
 
   private replayCurrentCue(): void {
-    if (this.currentCueIndex >= 0) {
+    if (this.currentCueIndex >= 0 && this.allCues[this.currentCueIndex]) {
       const current = this.allCues[this.currentCueIndex];
       this.adapter?.seekTo(current.startMs);
+      const video = this.adapter?.getVideoElement();
+      if (video && video.paused) video.play();
     }
   }
 

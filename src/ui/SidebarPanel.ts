@@ -236,13 +236,19 @@ export class SidebarPanel {
       const playIcon = row.querySelector<HTMLElement>('.cr-cue-play-icon');
       if (idx === index) {
         row.classList.add('cr-active-row');
-        (row as HTMLElement).style.background = '#181818';
-        if (playIcon) playIcon.style.visibility = 'visible';
+        (row as HTMLElement).style.background = '#1a1a1a';
+        if (playIcon) {
+          playIcon.style.visibility = 'visible';
+          playIcon.style.opacity = '1';
+        }
         row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } else {
         row.classList.remove('cr-active-row');
-        (row as HTMLElement).style.background = '#0f0f0f';
-        if (playIcon) playIcon.style.visibility = 'hidden';
+        (row as HTMLElement).style.background = '#0d0d0d';
+        if (playIcon) {
+          playIcon.style.visibility = 'hidden';
+          playIcon.style.opacity = '0.6';
+        }
       }
     });
   }
@@ -273,38 +279,54 @@ export class SidebarPanel {
       row.style.cssText = `
         display: flex !important;
         align-items: flex-start !important;
-        padding: 10px 12px !important;
+        padding: 11px 14px !important;
         border-top: 1px solid #1a1a1a !important;
-        background: ${isActive ? '#181818' : '#0f0f0f'} !important;
+        background: ${isActive ? '#1a1a1a' : '#0d0d0d'} !important;
         cursor: pointer !important;
         transition: background 0.15s ease !important;
         position: relative !important;
-        min-height: 38px !important;
+        min-height: 40px !important;
         box-sizing: border-box !important;
       `;
 
-      // 1. Purple Play Circle Icon (▶)
-      const playCircle = document.createElement('div');
+      // 1. Purple Play Circle Button (▶) (Matches ref/image copy.png)
+      const playCircle = document.createElement('button');
       playCircle.className = 'cr-cue-play-icon';
+      playCircle.title = 'Replay this sentence';
+      playCircle.setAttribute('aria-label', 'Replay this sentence');
       playCircle.style.cssText = `
-        width: 18px !important;
-        height: 18px !important;
-        min-width: 18px !important;
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px !important;
         border-radius: 50% !important;
         background: #9333ea !important;
         color: #ffffff !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 9px !important;
-        margin-right: 8px !important;
+        font-size: 10px !important;
+        margin-right: 10px !important;
         margin-top: 2px !important;
         visibility: ${isActive ? 'visible' : 'hidden'} !important;
+        opacity: ${isActive ? '1' : '0.6'} !important;
         box-shadow: 0 1px 4px rgba(147, 51, 234, 0.4) !important;
+        border: none !important;
+        cursor: pointer !important;
+        padding: 0 !important;
+        outline: none !important;
+        flex-shrink: 0 !important;
+        transition: transform 0.15s ease, opacity 0.15s ease !important;
       `;
       playCircle.textContent = '▶';
 
-      // 2. Sentence Text with interactive word tokens
+      playCircle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.activeCueIndex = index;
+        this.highlightActiveCue(index);
+        this.callbacks?.onSeek(cue.startMs);
+      });
+
+      // 2. Sentence Text with interactive, CEFR-colored word tokens
       const textWrapper = document.createElement('div');
       textWrapper.className = 'cr-cue-text-wrapper';
       textWrapper.style.cssText = `
@@ -313,6 +335,8 @@ export class SidebarPanel {
         line-height: 1.45 !important;
         color: #e5e5e5 !important;
         word-break: break-word !important;
+        font-family: 'Roboto', 'Nunito', -apple-system, sans-serif !important;
+        font-weight: 500 !important;
       `;
 
       // Tokenize the sentence into interactive words
@@ -332,16 +356,26 @@ export class SidebarPanel {
         if (token.isPunctuation) {
           wordSpan.style.color = '#777777';
         } else {
+          // CEFR color palette matching ref/image copy.png
+          const wordLen = token.cleanText.length;
+          let wordColor = '#7df9c2'; // mint green (common / known)
+          if (wordLen >= 5 && wordLen <= 7) {
+            wordColor = '#fbc18d'; // peach orange (intermediate)
+          } else if (wordLen > 7) {
+            wordColor = '#c084fc'; // purple violet (advanced)
+          }
+
           wordSpan.style.cssText = `
             cursor: pointer !important;
             padding: 1px 3px !important;
             border-radius: 3px !important;
             transition: background 0.15s ease !important;
             display: inline-block !important;
+            color: ${wordColor} !important;
           `;
 
           // Word Hover: Show dark card (Screenshot 093511.png)
-          wordSpan.addEventListener('mouseenter', (e) => {
+          wordSpan.addEventListener('mouseenter', () => {
             wordSpan.style.background = 'rgba(255, 255, 255, 0.15)';
             this.handleWordHover(token.cleanText, token.lemma, cue.text, wordSpan);
           });
@@ -351,9 +385,10 @@ export class SidebarPanel {
             this.hideHoverCard();
           });
 
-          // Word Click: Pause video & trigger dictionary
+          // Word Click: Immediately pause video, hide hover card & trigger dictionary
           wordSpan.addEventListener('click', (e) => {
             e.stopPropagation();
+            this.hideHoverCard();
             this.callbacks?.onPauseVideo?.();
             this.callbacks?.onWordClick?.(token.cleanText, token.lemma, wordSpan);
           });
@@ -405,19 +440,25 @@ export class SidebarPanel {
       row.addEventListener('mouseenter', () => {
         if (index !== this.activeCueIndex) {
           row.style.background = '#141414';
+          playCircle.style.visibility = 'visible';
+          playCircle.style.opacity = '0.75';
         }
         actionsWrapper.style.display = 'flex';
       });
 
       row.addEventListener('mouseleave', () => {
         if (index !== this.activeCueIndex) {
-          row.style.background = '#0f0f0f';
+          row.style.background = '#0d0d0d';
+          playCircle.style.visibility = 'hidden';
+          playCircle.style.opacity = '0.6';
         }
         actionsWrapper.style.display = 'none';
       });
 
       // Row click: Jump to video timestamp and play
       row.addEventListener('click', () => {
+        this.activeCueIndex = index;
+        this.highlightActiveCue(index);
         this.callbacks?.onSeek(cue.startMs);
       });
 

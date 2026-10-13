@@ -14,6 +14,7 @@ export interface DictionaryPopupOptions {
   onMarkIgnored?: () => void;
   onSavePhrase?: () => void;
   onPlayAudio?: () => void;
+  onClose?: () => void;
 }
 
 /**
@@ -21,6 +22,28 @@ export interface DictionaryPopupOptions {
  */
 export function buildDictionaryPopup(options: DictionaryPopupOptions): HTMLElement {
   const container = document.createElement('div');
+
+  // ─── Top Bar: CodiReactor Brand + Close Button ───
+  const topBar = document.createElement('div');
+  topBar.className = 'cr-dict-top-bar';
+
+  const brandTitle = document.createElement('span');
+  brandTitle.className = 'cr-dict-brand-title';
+  brandTitle.textContent = 'CodiReactor';
+  topBar.appendChild(brandTitle);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'cr-dict-close-btn';
+  closeBtn.textContent = '✖';
+  closeBtn.setAttribute('aria-label', 'Close dictionary');
+  closeBtn.title = 'Close (Esc)';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    options.onClose?.();
+  });
+  topBar.appendChild(closeBtn);
+
+  container.appendChild(topBar);
 
   // ─── Header: Word + IPA + POS + Audio ──────
 

@@ -70,7 +70,7 @@ export class FirstRunModal {
       font-weight: 600 !important;
       color: #f1f1f1 !important;
     `;
-    title.textContent = 'Language Reactor';
+    title.textContent = 'CodiReactor';
 
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '✖';

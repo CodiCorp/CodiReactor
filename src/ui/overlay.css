@@ -46,7 +46,7 @@
   pointer-events: auto;
   max-width: 90%;
   margin-bottom: 52px;
-  padding: 6px 14px;
+  padding: 8px 16px;
   background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -54,7 +54,7 @@
   text-align: center;
   transition: opacity 0.2s ease, transform 0.15s ease;
   user-select: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 .cr-subtitle-box.cr-hidden {
@@ -63,16 +63,80 @@
   pointer-events: none;
 }
 
+.cr-subtitle-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.cr-sub-replay-btn {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border-radius: 50%;
+  background: #9333ea;
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+  box-shadow: 0 2px 6px rgba(147, 51, 234, 0.4);
+  padding: 0;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.cr-sub-replay-btn:hover {
+  background: #a855f7;
+  transform: scale(1.1);
+}
+
+.cr-sub-replay-btn:active {
+  transform: scale(0.92);
+}
+
+.cr-sub-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.cr-sub-star-btn,
+.cr-sub-more-btn {
+  background: none;
+  border: none;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.cr-sub-star-btn:hover,
+.cr-sub-more-btn:hover {
+  color: #ffffff;
+  transform: scale(1.1);
+}
+
 .cr-subtitle-target {
-  font-size: 1.45rem;
+  font-family: 'Roboto', 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 1.55rem;
   font-weight: 700;
   line-height: 1.35;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.015em;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.95);
 }
 
 .cr-subtitle-translation {
@@ -194,21 +258,21 @@
   transform: scale(0.97);
 }
 
-/* Token status colors */
+/* Token status colors (Parity with Screenshot 2026-10-12 182202.png) */
 .cr-known {
-  color: #4ade80; /* mint green */
+  color: #7df9c2; /* crisp mint green */
 }
 
 .cr-suggested {
-  color: #fb923c; /* orange */
+  color: #fbc18d; /* warm peach orange */
   text-decoration-line: underline;
   text-decoration-style: dotted;
   text-underline-offset: 3px;
-  text-decoration-color: rgba(251, 146, 60, 0.5);
+  text-decoration-color: rgba(251, 193, 141, 0.5);
 }
 
 .cr-learning {
-  color: #c084fc; /* purple */
+  color: #c084fc; /* purple violet */
 }
 
 .cr-learning.cr-outline {
@@ -218,7 +282,7 @@
 }
 
 .cr-ignored {
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .cr-special {
@@ -239,23 +303,56 @@
 
 .cr-dict-popup {
   pointer-events: auto;
-  position: absolute;
-  z-index: 100;
-  min-width: 300px;
+  position: fixed;
+  z-index: 2147483647;
+  min-width: 310px;
   max-width: 420px;
-  background: rgba(15, 15, 25, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  padding: 14px 16px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  background: #18181b;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  padding: 12px 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05);
   animation: cr-popup-in 0.18s ease-out;
   color: #e4e4e7;
+  font-family: 'Roboto', 'Segoe UI', -apple-system, sans-serif;
 }
 
 .cr-dict-popup[hidden] {
   display: none;
+}
+
+.cr-dict-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cr-dict-brand-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #c084fc;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.cr-dict-close-btn {
+  background: none;
+  border: none;
+  color: #a1a1aa;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+  line-height: 1;
+}
+
+.cr-dict-close-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 @keyframes cr-popup-in {

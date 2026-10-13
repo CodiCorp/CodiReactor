@@ -29,6 +29,8 @@ export class OverlayManager {
   private onWordRightClick: ((word: string, lemma: string) => void) | null = null;
   private onSeekPrev: (() => void) | null = null;
   private onSeekNext: (() => void) | null = null;
+  private onReplayCurrent: (() => void) | null = null;
+  private onSaveCurrent: (() => void) | null = null;
 
   /**
    * Mount the overlay into a parent element using closed Shadow DOM.
@@ -56,22 +58,67 @@ export class OverlayManager {
     container.setAttribute('role', 'region');
     container.setAttribute('aria-live', 'polite');
 
-    // Subtitle box
+    // Subtitle box (Matches reference ref/image.png)
     this.subtitleBox = document.createElement('div');
     this.subtitleBox.className = 'cr-subtitle-box';
     this.subtitleBox.setAttribute('role', 'status');
     this.subtitleBox.setAttribute('aria-label', 'Subtitles');
 
+    const mainRow = document.createElement('div');
+    mainRow.className = 'cr-subtitle-main-row';
+
+    // 1. Purple circle replay button (ref/image.png)
+    const replayBtn = document.createElement('button');
+    replayBtn.className = 'cr-sub-replay-btn';
+    replayBtn.textContent = '▶';
+    replayBtn.title = 'Replay sentence (A)';
+    replayBtn.setAttribute('aria-label', 'Replay current sentence');
+    replayBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.onReplayCurrent?.();
+    });
+
+    // 2. Target language sentence line
     this.targetLine = document.createElement('div');
     this.targetLine.className = 'cr-subtitle-target';
     this.targetLine.setAttribute('lang', 'en');
     this.targetLine.setAttribute('dir', 'ltr');
 
+    // 3. Actions: Star Bookmark ☆ and Menu ⋮
+    const subActions = document.createElement('div');
+    subActions.className = 'cr-sub-actions';
+
+    const starBtn = document.createElement('button');
+    starBtn.className = 'cr-sub-star-btn';
+    starBtn.textContent = '☆';
+    starBtn.title = 'Save sentence (R)';
+    starBtn.setAttribute('aria-label', 'Save sentence');
+    starBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isSaved = starBtn.textContent === '★';
+      starBtn.textContent = isSaved ? '☆' : '★';
+      starBtn.style.color = isSaved ? 'rgba(255, 255, 255, 0.6)' : '#eab308';
+      this.onSaveCurrent?.();
+    });
+
+    const moreBtn = document.createElement('button');
+    moreBtn.className = 'cr-sub-more-btn';
+    moreBtn.textContent = '⋮';
+    moreBtn.title = 'Options';
+    moreBtn.setAttribute('aria-label', 'Subtitle options');
+
+    subActions.appendChild(starBtn);
+    subActions.appendChild(moreBtn);
+
+    mainRow.appendChild(replayBtn);
+    mainRow.appendChild(this.targetLine);
+    mainRow.appendChild(subActions);
+
     this.translationLine = document.createElement('div');
     this.translationLine.className = 'cr-subtitle-translation';
     this.translationLine.style.display = 'none';
 
-    this.subtitleBox.appendChild(this.targetLine);
+    this.subtitleBox.appendChild(mainRow);
     this.subtitleBox.appendChild(this.translationLine);
 
     // Navigation arrows
@@ -108,6 +155,13 @@ export class OverlayManager {
         this.hideDictPopup();
       }
     });
+
+    // Close popup on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.hideDictPopup();
+      }
+    });
   }
 
   /**
@@ -117,7 +171,7 @@ export class OverlayManager {
     if (!this.targetLine) return;
 
     // Clear existing content
-    this.targetLine.innerHTML = '';
+    this.targetLine.replaceChildren();
     this.targetLine.setAttribute('lang', language);
 
     // Set text direction
@@ -213,8 +267,8 @@ export class OverlayManager {
   showDictPopup(content: HTMLElement, anchorElement: HTMLElement): void {
     if (!this.dictPopup || !this.shadowRoot) return;
 
-    this.dictPopup.innerHTML = '';
-    this.dictPopup.appendChild(content);
+    this.hideWordBalloon();
+    this.dictPopup.replaceChildren(content);
     this.dictPopup.hidden = false;
 
     // Position calculation (collision-safe)
@@ -255,7 +309,7 @@ export class OverlayManager {
   hideDictPopup(): void {
     if (this.dictPopup) {
       this.dictPopup.hidden = true;
-      this.dictPopup.innerHTML = '';
+      this.dictPopup.replaceChildren();
     }
   }
 
@@ -269,7 +323,7 @@ export class OverlayManager {
     coveragePercent?: number;
   }): void {
     if (!this.controlsBar) return;
-    this.controlsBar.innerHTML = '';
+    this.controlsBar.replaceChildren();
 
     // Master toggle
     const toggleBtn = this.createControlBtn('LR', 'Toggle CodiReactor', controls.onToggle);
@@ -305,7 +359,7 @@ export class OverlayManager {
 
   /** Clear the subtitle display */
   clearSubtitles(): void {
-    if (this.targetLine) this.targetLine.innerHTML = '';
+    if (this.targetLine) this.targetLine.replaceChildren();
     if (this.translationLine) {
       this.translationLine.textContent = '';
       this.translationLine.style.display = 'none';
@@ -327,11 +381,15 @@ export class OverlayManager {
     onWordRightClick?: (word: string, lemma: string) => void;
     onSeekPrev?: () => void;
     onSeekNext?: () => void;
+    onReplayCurrent?: () => void;
+    onSaveCurrent?: () => void;
   }): void {
     this.onWordClick = callbacks.onWordClick || null;
     this.onWordRightClick = callbacks.onWordRightClick || null;
     this.onSeekPrev = callbacks.onSeekPrev || null;
     this.onSeekNext = callbacks.onSeekNext || null;
+    this.onReplayCurrent = callbacks.onReplayCurrent || null;
+    this.onSaveCurrent = callbacks.onSaveCurrent || null;
   }
 
   /** Show blue balloon tooltip above hovered word (Screenshots 093559 & 093623) */
