@@ -58,4 +58,29 @@ describe('SentenceSegmenter', () => {
       "Oh my god, this model.",
     ]);
   });
+
+  it('eliminates alternating rolling ASR repetitions and absorbs fragments (Image copy 2 fix)', () => {
+    const rawStutterLoop: SubtitleCue[] = [
+      { id: '1', startMs: 1000, endMs: 3000, text: "How did they make this score this well on benchmark?" },
+      { id: '2', startMs: 3200, endMs: 5000, text: "Are they high?" },
+      { id: '3', startMs: 5200, endMs: 7000, text: "Why do I like it?" },
+      { id: '4', startMs: 7200, endMs: 9000, text: "Oh my god, this model." },
+      // Rolling ASR repeats with fragments and delayed timestamps:
+      { id: '5', startMs: 9500, endMs: 11000, text: "this well on benchmark?" },
+      { id: '6', startMs: 11500, endMs: 13000, text: "Are they high?" },
+      { id: '7', startMs: 13500, endMs: 15000, text: "Oh my god," },
+      { id: '8', startMs: 15500, endMs: 17000, text: "this well on benchmark?" },
+      { id: '9', startMs: 17500, endMs: 19000, text: "Are they high?" },
+      { id: '10', startMs: 19500, endMs: 21000, text: "Why do I like it?" },
+    ];
+
+    const result = consolidateAndSegmentCues(rawStutterLoop);
+    expect(result).toHaveLength(4);
+    expect(result.map(r => r.text)).toEqual([
+      "How did they make this score this well on benchmark?",
+      "Are they high?",
+      "Why do I like it?",
+      "Oh my god, this model.",
+    ]);
+  });
 });

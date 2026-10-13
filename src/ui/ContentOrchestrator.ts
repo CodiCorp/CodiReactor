@@ -133,6 +133,27 @@ export class ContentOrchestrator {
           const video = this.adapter?.getVideoElement();
           if (video && !video.paused) video.pause();
         },
+        onWordStatusChange: (lemma, status) => {
+          if (status === 'known') {
+            this.vocab.knownWords.add(lemma);
+            this.vocab.learningWords.delete(lemma);
+            this.vocab.ignoredWords.delete(lemma);
+          } else if (status === 'learning') {
+            this.vocab.learningWords.add(lemma);
+            this.vocab.knownWords.delete(lemma);
+            this.vocab.ignoredWords.delete(lemma);
+          } else if (status === 'ignored') {
+            this.vocab.ignoredWords.add(lemma);
+            this.vocab.knownWords.delete(lemma);
+            this.vocab.learningWords.delete(lemma);
+          }
+          this.refreshCurrentCue();
+          this.messageBus.send({
+            type: 'WORD_STATUS_CHANGED',
+            payload: { lemma, status },
+            source: 'content',
+          });
+        },
         onSavePhrase: (cue) => {
           this.messageBus.send({
             type: 'SAVE_PHRASE',

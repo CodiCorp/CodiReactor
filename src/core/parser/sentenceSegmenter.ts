@@ -58,11 +58,19 @@ export function splitIntoSentences(text: string): string[] {
 }
 
 /**
+ * Normalize sentence text for fuzzy comparison (removes all punctuation, spaces, and case).
+ */
+export function normalizeSentence(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]/gi, '');
+}
+
+/**
  * Consolidates rolling ASR cues into discrete, sentence-by-sentence cues.
  * Completely eliminates:
  * 1. Rolling "typewriter style" cumulative duplicates.
  * 2. Block/stream duplicates when cues are re-emitted or looped.
- * 3. Incomplete sentence fragments.
+ * 3. Incomplete sentence fragments (absorbed into complete sentences).
+ * 4. Cyclic repeating subsequence loops (e.g. A B C A B C).
  */
 export function consolidateAndSegmentCues(rawCues: SubtitleCue[]): SubtitleCue[] {
   if (!rawCues || rawCues.length === 0) return [];
@@ -75,16 +83,41 @@ export function consolidateAndSegmentCues(rawCues: SubtitleCue[]): SubtitleCue[]
     const cleanedText = cleanSubtitleText(raw.text);
     if (!cleanedText || cleanedText.length < 2) continue;
 
-    // Check if a cue with identical or near-identical text already exists within +/- 20 seconds
+    const norm = normalizeSentence(cleanedText);
+    if (!norm) continue;
+
+    // Check if an identical or near-identical cue exists within +/- 60 seconds
     const existingIndex = consolidated.findIndex(existing => {
-      const sameText = existing.text.toLowerCase() === cleanedText.toLowerCase();
-      const closeTime = Math.abs(existing.startMs - raw.startMs) < 20000;
+      const existingNorm = normalizeSentence(existing.text);
+      const sameText = existingNorm === norm;
+      const closeTime = Math.abs(existing.startMs - raw.startMs) < 60000;
       return sameText && closeTime;
     });
 
     if (existingIndex !== -1) {
       // Merge end time if the new cue has longer duration, and skip duplicate row
       consolidated[existingIndex].endMs = Math.max(consolidated[existingIndex].endMs, raw.endMs);
+      continue;
+    }
+
+    // Fragment absorption: Check if raw cue is an incomplete fragment of an existing cue (or vice versa) within 45s
+    const fragmentIndex = consolidated.findIndex(existing => {
+      const existingNorm = normalizeSentence(existing.text);
+      const closeTime = Math.abs(existing.startMs - raw.startMs) < 45000;
+      if (!closeTime) return false;
+      const isSub = (norm.length >= 8 && existingNorm.includes(norm)) ||
+                    (existingNorm.length >= 8 && norm.includes(existingNorm));
+      return isSub;
+    });
+
+    if (fragmentIndex !== -1) {
+      const existing = consolidated[fragmentIndex];
+      const existingNorm = normalizeSentence(existing.text);
+      if (norm.length > existingNorm.length) {
+        // Replace shorter fragment with fuller sentence
+        existing.text = cleanedText;
+      }
+      existing.endMs = Math.max(existing.endMs, raw.endMs);
       continue;
     }
 
@@ -102,7 +135,6 @@ export function consolidateAndSegmentCues(rawCues: SubtitleCue[]): SubtitleCue[]
     const last = consolidated[consolidated.length - 1];
 
     // Case 1: The new cue extends the last cue (YouTube progressive/rolling ASR)
-    // Example: last = "I'm going to give you a chance", new = "I'm going to give you a chance to practice"
     if (cleanedText.startsWith(last.text) || (last.text.length > 15 && cleanedText.includes(last.text.slice(0, 20)))) {
       last.text = cleanedText;
       last.endMs = Math.max(last.endMs, raw.endMs);
@@ -115,8 +147,8 @@ export function consolidateAndSegmentCues(rawCues: SubtitleCue[]): SubtitleCue[]
       continue;
     }
 
-    // Case 3: Overlapping timestamps (< 800ms apart) with identical text
-    if (Math.abs(raw.startMs - last.startMs) < 800 && raw.text === last.text) {
+    // Case 3: Overlapping timestamps (< 1000ms apart) with identical text
+    if (Math.abs(raw.startMs - last.startMs) < 1000 && raw.text === last.text) {
       last.endMs = Math.max(last.endMs, raw.endMs);
       continue;
     }
@@ -167,16 +199,59 @@ export function consolidateAndSegmentCues(rawCues: SubtitleCue[]): SubtitleCue[]
     }
   }
 
-  // Phase 3: Final deduplication pass on generated sentence list
+  // Phase 3: Global sliding-window deduplication (90s window + consecutive duplicate filter)
   const finalUnique: SubtitleCue[] = [];
   for (const s of result) {
+    const sNorm = normalizeSentence(s.text);
+    if (!sNorm || sNorm.length < 2) continue;
+
+    // Check 1: Never allow consecutive identical sentences
+    const lastExisting = finalUnique[finalUnique.length - 1];
+    if (lastExisting && normalizeSentence(lastExisting.text) === sNorm) {
+      lastExisting.endMs = Math.max(lastExisting.endMs, s.endMs);
+      continue;
+    }
+
+    // Check 2: Within 90 seconds, drop identical sentence
     const isDup = finalUnique.some(existing => {
-      const sameText = existing.text.toLowerCase().trim() === s.text.toLowerCase().trim();
-      const closeTime = Math.abs(existing.startMs - s.startMs) < 15000;
+      const sameText = normalizeSentence(existing.text) === sNorm;
+      const closeTime = Math.abs(existing.startMs - s.startMs) < 90000;
       return sameText && closeTime;
     });
-    if (!isDup) {
-      finalUnique.push(s);
+
+    if (isDup) continue;
+
+    // Check 3: Fragment check in final list
+    const isFrag = finalUnique.some(existing => {
+      const exNorm = normalizeSentence(existing.text);
+      const closeTime = Math.abs(existing.startMs - s.startMs) < 60000;
+      return closeTime && sNorm.length >= 8 && exNorm.includes(sNorm);
+    });
+
+    if (isFrag) continue;
+
+    finalUnique.push(s);
+  }
+
+  // Phase 4: Subsequence cycle elimination (detect repeating loops like [A, B, A, B] or [A, B, C, A, B, C])
+  if (finalUnique.length >= 4) {
+    for (let period = 1; period <= 4; period++) {
+      let i = 0;
+      while (i + period * 2 <= finalUnique.length) {
+        let isLoop = true;
+        for (let p = 0; p < period; p++) {
+          if (normalizeSentence(finalUnique[i + p].text) !== normalizeSentence(finalUnique[i + period + p].text)) {
+            isLoop = false;
+            break;
+          }
+        }
+        if (isLoop) {
+          // Remove the duplicate repeating cycle slice
+          finalUnique.splice(i + period, period);
+        } else {
+          i++;
+        }
+      }
     }
   }
 

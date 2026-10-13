@@ -6,6 +6,8 @@
 import { SubtitleCue } from '../core/types';
 import { getQuickWordTranslation, getSentenceTranslation, getCollocation } from '../services/quickTranslation';
 import { tokenize } from '../core/linguistics/tokenizer';
+import { lookupFrequency } from '../core/linguistics/frequencyEngine';
+import { lemmatize } from '../core/linguistics/lemmatizer';
 
 export interface SidebarCallbacks {
   onSeek: (timeMs: number) => void;
@@ -13,6 +15,7 @@ export interface SidebarCallbacks {
   onSavePhrase?: (cue: SubtitleCue) => void;
   onOpenSettings?: () => void;
   onPauseVideo?: () => void;
+  onWordStatusChange?: (lemma: string, status: 'known' | 'learning' | 'ignored') => void;
 }
 
 export class SidebarPanel {
@@ -23,12 +26,37 @@ export class SidebarPanel {
   private cues: SubtitleCue[] = [];
   private activeCueIndex = -1;
   private savedCueIds = new Set<string>();
+  private knownWords = new Set<string>();
+  private learningWords = new Set<string>();
+  private ignoredWords = new Set<string>();
+  private dismissedGuide = false;
   private isVisible = true;
   private callbacks: SidebarCallbacks | null = null;
   private hoverTimeout: any = null;
 
   constructor(callbacks?: SidebarCallbacks) {
     if (callbacks) this.callbacks = callbacks;
+    this.loadVocabFromStorage();
+  }
+
+  private loadVocabFromStorage(): void {
+    try {
+      const k = typeof localStorage !== 'undefined' ? localStorage.getItem('cr_known_words') : null;
+      if (k) this.knownWords = new Set(JSON.parse(k));
+      const l = typeof localStorage !== 'undefined' ? localStorage.getItem('cr_learning_words') : null;
+      if (l) this.learningWords = new Set(JSON.parse(l));
+      const ig = typeof localStorage !== 'undefined' ? localStorage.getItem('cr_ignored_words') : null;
+      if (ig) this.ignoredWords = new Set(JSON.parse(ig));
+    } catch { /* ignore */ }
+  }
+
+  private saveVocabToStorage(): void {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.setItem('cr_known_words', JSON.stringify(Array.from(this.knownWords)));
+      localStorage.setItem('cr_learning_words', JSON.stringify(Array.from(this.learningWords)));
+      localStorage.setItem('cr_ignored_words', JSON.stringify(Array.from(this.ignoredWords)));
+    } catch { /* ignore */ }
   }
 
   mount(parent: HTMLElement = document.body): void {
@@ -183,7 +211,7 @@ export class SidebarPanel {
       });
       tab.style.color = '#ffffff';
       tab.style.borderBottomColor = '#a855f7';
-      this.renderCues();
+      this.renderCurrentTab();
     });
 
     return tab;
@@ -215,7 +243,17 @@ export class SidebarPanel {
 
   setCues(cues: SubtitleCue[]): void {
     this.cues = cues;
-    this.renderCues();
+    this.renderCurrentTab();
+  }
+
+  private renderCurrentTab(): void {
+    if (this.activeTab === 'subtitles') {
+      this.renderCues();
+    } else if (this.activeTab === 'words') {
+      this.renderWordsTab();
+    } else if (this.activeTab === 'saved') {
+      this.renderSavedTab();
+    }
   }
 
   setActiveTime(timeMs: number): void {
@@ -578,6 +616,448 @@ export class SidebarPanel {
         this.hoverCardEl.style.display = 'none';
       }
     }, 150);
+  }
+
+  /**
+   * Render the Words tab: displays words from this video sorted by frequency rank
+   * (Matches Screenshot ref/image copy 3.png)
+   */
+  private renderWordsTab(): void {
+    if (!this.cueListEl) return;
+    this.cueListEl.replaceChildren();
+
+    if (this.cues.length === 0) {
+      const emptyMsg = document.createElement('div');
+      emptyMsg.style.cssText = `
+        padding: 32px 16px !important;
+        text-align: center !important;
+        color: #71717a !important;
+        font-size: 13px !important;
+      `;
+      emptyMsg.textContent = 'No words loaded yet. Start video playback.';
+      this.cueListEl.appendChild(emptyMsg);
+      return;
+    }
+
+    // 1. Turtle Mascot Guide Card (Screenshot image copy 3.png)
+    if (!this.dismissedGuide) {
+      const guideBox = document.createElement('div');
+      guideBox.className = 'cr-words-guide-box';
+      guideBox.style.cssText = `
+        margin: 12px 12px 10px 12px !important;
+        padding: 12px 14px !important;
+        background: #1c1c1e !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 8px !important;
+        box-sizing: border-box !important;
+      `;
+
+      const guideHeader = document.createElement('div');
+      guideHeader.style.cssText = `
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        margin-bottom: 8px !important;
+      `;
+      const title = document.createElement('span');
+      title.textContent = 'Words from this video, sorted by frequency';
+      title.style.cssText = 'font-weight: 600; font-size: 13px; color: #f4f4f5;';
+      const turtle = document.createElement('span');
+      turtle.textContent = '🐢';
+      turtle.style.cssText = 'font-size: 20px;';
+
+      guideHeader.appendChild(title);
+      guideHeader.appendChild(turtle);
+      guideBox.appendChild(guideHeader);
+
+      const bullets = document.createElement('div');
+      bullets.style.cssText = 'font-size: 12px; color: #a1a1aa; line-height: 1.6; margin-bottom: 8px;';
+      
+      const b1 = document.createElement('div');
+      b1.textContent = '• Right-click to mark a word';
+      const b2 = document.createElement('div');
+      b2.textContent = '• Left click for dictionary and examples';
+      bullets.appendChild(b1);
+      bullets.appendChild(b2);
+      guideBox.appendChild(bullets);
+
+      const okRow = document.createElement('div');
+      okRow.style.cssText = 'display: flex; justify-content: flex-end;';
+      const okBtn = document.createElement('button');
+      okBtn.textContent = 'OK';
+      okBtn.style.cssText = `
+        background: #27272a !important;
+        border: 1px solid #3f3f46 !important;
+        color: #ffffff !important;
+        padding: 3px 12px !important;
+        border-radius: 4px !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+      `;
+      okBtn.addEventListener('click', () => {
+        this.dismissedGuide = true;
+        guideBox.remove();
+      });
+      okRow.appendChild(okBtn);
+      guideBox.appendChild(okRow);
+
+      this.cueListEl.appendChild(guideBox);
+    }
+
+    // 2. Extract and lemmatize all unique words from cues
+    const wordMap = new Map<string, { word: string; lemma: string; count: number; rank: number }>();
+    for (const cue of this.cues) {
+      const tokens = tokenize(cue.text, 'en');
+      for (const t of tokens) {
+        if (t.isPunctuation || t.isWhitespace) continue;
+        const clean = t.cleanText.toLowerCase();
+        if (clean.length < 1 || /^\d+$/.test(clean)) continue;
+        const lemma = lemmatize(clean, 'en').toLowerCase();
+        if (!wordMap.has(lemma)) {
+          const freq = lookupFrequency(lemma);
+          const rank = freq?.rank || 1500;
+          wordMap.set(lemma, { word: clean, lemma, count: 1, rank });
+        } else {
+          wordMap.get(lemma)!.count++;
+        }
+      }
+    }
+
+    const allWordItems = Array.from(wordMap.values());
+    const totalUnique = allWordItems.length;
+
+    // Calculate status counts
+    let knownCount = 0;
+    let learningCount = 0;
+    let ignoredCount = 0;
+
+    for (const item of allWordItems) {
+      if (this.knownWords.has(item.lemma)) knownCount++;
+      else if (this.learningWords.has(item.lemma)) learningCount++;
+      else if (this.ignoredWords.has(item.lemma)) ignoredCount++;
+    }
+
+    // 3. Status Badges Bar (Matches Screenshot ref/image copy 3.png)
+    const statsBar = document.createElement('div');
+    statsBar.className = 'cr-words-stats-bar';
+    statsBar.style.cssText = `
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 6px !important;
+      align-items: center !important;
+      padding: 0 12px 10px 12px !important;
+    `;
+
+    // Known badge [✓ N]
+    const knownBadge = this.createStatPill(`✓ ${knownCount}`, '#15803d', '#22c55e');
+    // Learning badge [📖 N]
+    const learningBadge = this.createStatPill(`📖 ${learningCount}`, '#854d0e', '#eab308');
+    // Ignored badge [🚫 N]
+    const ignoredBadge = this.createStatPill(`🚫 ${ignoredCount}`, '#27272a', '#71717a');
+    // Total badge [/ N]
+    const totalBadge = this.createStatPill(`/ ${totalUnique}`, '#1e1b4b', '#6366f1');
+
+    statsBar.appendChild(knownBadge);
+    statsBar.appendChild(learningBadge);
+    statsBar.appendChild(ignoredBadge);
+    statsBar.appendChild(totalBadge);
+
+    // Filter tags [# 0]
+    for (let i = 0; i < 4; i++) {
+      const hashPill = this.createStatPill('# 0', '#18181b', '#3f3f46');
+      hashPill.style.color = '#71717a';
+      statsBar.appendChild(hashPill);
+    }
+
+    this.cueListEl.appendChild(statsBar);
+
+    // 4. Group words into Frequency Rank Buckets:
+    // Rank 1-100, Rank 101-200, Rank 201-300, Rank 301-400, Rank 401-500, etc.
+    const buckets: Array<{ title: string; min: number; max: number; words: typeof allWordItems }> = [
+      { title: 'Rank 1 - 100', min: 1, max: 100, words: [] },
+      { title: 'Rank 101 - 200', min: 101, max: 200, words: [] },
+      { title: 'Rank 201 - 300', min: 201, max: 300, words: [] },
+      { title: 'Rank 301 - 400', min: 301, max: 400, words: [] },
+      { title: 'Rank 401 - 500', min: 401, max: 500, words: [] },
+      { title: 'Rank 501+', min: 501, max: Infinity, words: [] },
+    ];
+
+    allWordItems.sort((a, b) => a.rank - b.rank);
+
+    for (const item of allWordItems) {
+      let placed = false;
+      for (const bucket of buckets) {
+        if (item.rank >= bucket.min && item.rank <= bucket.max) {
+          bucket.words.push(item);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        buckets[buckets.length - 1].words.push(item);
+      }
+    }
+
+    // 5. Render Rank Sections and Words Grid (Screenshot image copy 3.png)
+    for (const bucket of buckets) {
+      if (bucket.words.length === 0) continue;
+
+      const sectionHeader = document.createElement('div');
+      sectionHeader.className = 'cr-rank-header';
+      sectionHeader.textContent = bucket.title;
+      sectionHeader.style.cssText = `
+        background: #27272a !important;
+        border-top: 1px solid #3f3f46 !important;
+        border-bottom: 1px solid #3f3f46 !important;
+        padding: 5px 12px !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        color: #d4d4d8 !important;
+        letter-spacing: 0.02em !important;
+      `;
+      this.cueListEl.appendChild(sectionHeader);
+
+      const wordsContainer = document.createElement('div');
+      wordsContainer.className = 'cr-rank-words-grid';
+      wordsContainer.style.cssText = `
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px 10px !important;
+        padding: 10px 12px 14px 12px !important;
+        background: #0d0d0d !important;
+      `;
+
+      for (const item of bucket.words) {
+        const chip = document.createElement('span');
+        chip.className = 'cr-vocab-chip';
+        chip.textContent = item.word;
+
+        // Color coding based on status
+        let color = '#7df9c2'; // mint green default
+        let isStrikethrough = false;
+        if (this.knownWords.has(item.lemma)) {
+          color = '#4ade80'; // verified green
+        } else if (this.learningWords.has(item.lemma)) {
+          color = '#fb923c'; // learning orange
+        } else if (this.ignoredWords.has(item.lemma)) {
+          color = '#71717a'; // ignored gray
+          isStrikethrough = true;
+        } else if (item.rank > 300) {
+          color = '#fbc18d';
+        } else if (item.rank > 1000) {
+          color = '#c084fc';
+        }
+
+        chip.style.cssText = `
+          cursor: pointer !important;
+          font-size: 13.5px !important;
+          font-weight: 500 !important;
+          color: ${color} !important;
+          padding: 2px 4px !important;
+          border-radius: 4px !important;
+          text-decoration: ${isStrikethrough ? 'line-through' : 'none'} !important;
+          transition: background 0.15s ease !important;
+          user-select: none !important;
+        `;
+
+        chip.addEventListener('mouseenter', () => {
+          chip.style.background = 'rgba(255, 255, 255, 0.12)';
+        });
+        chip.addEventListener('mouseleave', () => {
+          chip.style.background = 'transparent';
+        });
+
+        // Left-click: Open dictionary popup
+        chip.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.callbacks?.onPauseVideo?.();
+          this.callbacks?.onWordClick(item.word, item.lemma, chip);
+        });
+
+        // Right-click: Open Quick Status Context Menu (Mark as Known / Learning / Ignore)
+        chip.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.showWordStatusMenu(item.word, item.lemma, e.clientX, e.clientY);
+        });
+
+        wordsContainer.appendChild(chip);
+      }
+
+      this.cueListEl.appendChild(wordsContainer);
+    }
+  }
+
+  private createStatPill(text: string, bg: string, border: string): HTMLElement {
+    const pill = document.createElement('span');
+    pill.textContent = text;
+    pill.style.cssText = `
+      display: inline-flex !important;
+      align-items: center !important;
+      background: ${bg} !important;
+      border: 1px solid ${border} !important;
+      color: #ffffff !important;
+      font-size: 11.5px !important;
+      font-weight: 700 !important;
+      padding: 3px 8px !important;
+      border-radius: 6px !important;
+      line-height: 1 !important;
+    `;
+    return pill;
+  }
+
+  private showWordStatusMenu(word: string, lemma: string, x: number, y: number): void {
+    const existing = document.querySelector('.cr-floating-status-menu');
+    if (existing) existing.remove();
+
+    const menu = document.createElement('div');
+    menu.className = 'cr-floating-status-menu';
+    menu.style.cssText = `
+      position: fixed !important;
+      top: ${Math.min(y, window.innerHeight - 160)}px !important;
+      left: ${Math.min(x, window.innerWidth - 200)}px !important;
+      background: #18181b !important;
+      border: 1px solid #3f3f46 !important;
+      border-radius: 8px !important;
+      padding: 6px !important;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+      z-index: 2147483647 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 4px !important;
+      min-width: 170px !important;
+    `;
+
+    const title = document.createElement('div');
+    title.textContent = `Word: "${word}"`;
+    title.style.cssText = 'font-size: 11px; font-weight: 700; color: #a1a1aa; padding: 4px 8px; border-bottom: 1px solid #27272a;';
+    menu.appendChild(title);
+
+    const makeOption = (label: string, color: string, action: () => void) => {
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      btn.style.cssText = `
+        background: none !important;
+        border: none !important;
+        color: ${color} !important;
+        font-size: 12.5px !important;
+        font-weight: 600 !important;
+        text-align: left !important;
+        padding: 6px 8px !important;
+        border-radius: 4px !important;
+        cursor: pointer !important;
+        transition: background 0.15s ease !important;
+      `;
+      btn.addEventListener('mouseenter', () => { btn.style.background = '#27272a'; });
+      btn.addEventListener('mouseleave', () => { btn.style.background = 'none'; });
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        action();
+        menu.remove();
+      });
+      return btn;
+    };
+
+    menu.appendChild(makeOption('✓ Mark as Known (1)', '#4ade80', () => {
+      this.knownWords.add(lemma);
+      this.learningWords.delete(lemma);
+      this.ignoredWords.delete(lemma);
+      this.saveVocabToStorage();
+      this.callbacks?.onWordStatusChange?.(lemma, 'known');
+      this.renderWordsTab();
+    }));
+
+    menu.appendChild(makeOption('📖 Mark as Learning (2)', '#fb923c', () => {
+      this.learningWords.add(lemma);
+      this.knownWords.delete(lemma);
+      this.ignoredWords.delete(lemma);
+      this.saveVocabToStorage();
+      this.callbacks?.onWordStatusChange?.(lemma, 'learning');
+      this.renderWordsTab();
+    }));
+
+    menu.appendChild(makeOption('🚫 Don\'t Learn / Ignore (3)', '#9ca3af', () => {
+      this.ignoredWords.add(lemma);
+      this.knownWords.delete(lemma);
+      this.learningWords.delete(lemma);
+      this.saveVocabToStorage();
+      this.callbacks?.onWordStatusChange?.(lemma, 'ignored');
+      this.renderWordsTab();
+    }));
+
+    document.body.appendChild(menu);
+
+    const closeHandler = () => {
+      menu.remove();
+      window.removeEventListener('click', closeHandler);
+    };
+    setTimeout(() => window.addEventListener('click', closeHandler), 10);
+  }
+
+  private renderSavedTab(): void {
+    if (!this.cueListEl) return;
+    this.cueListEl.replaceChildren();
+
+    const savedCues = this.cues.filter(c => this.savedCueIds.has(c.id));
+    if (savedCues.length === 0) {
+      const emptyMsg = document.createElement('div');
+      emptyMsg.style.cssText = `
+        padding: 32px 16px !important;
+        text-align: center !important;
+        color: #71717a !important;
+        font-size: 13px !important;
+      `;
+      emptyMsg.textContent = 'No saved phrases yet. Click ☆ on any sentence to save it.';
+      this.cueListEl.appendChild(emptyMsg);
+      return;
+    }
+
+    savedCues.forEach((cue) => {
+      const row = document.createElement('div');
+      row.style.cssText = `
+        display: flex !important;
+        align-items: flex-start !important;
+        padding: 10px 14px !important;
+        border-top: 1px solid #1a1a1a !important;
+        background: #0d0d0d !important;
+        gap: 10px !important;
+      `;
+
+      const playBtn = document.createElement('button');
+      playBtn.textContent = '▶';
+      playBtn.style.cssText = `
+        width: 20px !important;
+        height: 20px !important;
+        border-radius: 50% !important;
+        background: #9333ea !important;
+        color: #fff !important;
+        border: none !important;
+        cursor: pointer !important;
+        font-size: 10px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      `;
+      playBtn.addEventListener('click', () => this.callbacks?.onSeek(cue.startMs));
+
+      const text = document.createElement('div');
+      text.textContent = cue.text;
+      text.style.cssText = 'flex: 1; font-size: 13px; color: #e5e5e5;';
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '🗑️';
+      delBtn.style.cssText = 'background:none; border:none; cursor:pointer; font-size:12px;';
+      delBtn.addEventListener('click', () => {
+        this.savedCueIds.delete(cue.id);
+        this.renderSavedTab();
+      });
+
+      row.appendChild(playBtn);
+      row.appendChild(text);
+      row.appendChild(delBtn);
+      this.cueListEl.appendChild(row);
+    });
   }
 
   setCallbacks(callbacks: SidebarCallbacks): void {

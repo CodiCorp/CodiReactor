@@ -451,9 +451,12 @@ export class YouTubeAdapter extends BasePlatformAdapter {
                 text,
               };
 
-              // Only emit if the text actually changed
-              const lastCue = this.currentCues[this.currentCues.length - 1];
-              if (!lastCue || lastCue.text !== text) {
+              // Only emit if not already present in recent cues (eliminates alternating ASR loop bug)
+              const exists = this.currentCues.some(c =>
+                c.text.toLowerCase().trim() === text.toLowerCase().trim() &&
+                Math.abs(c.startMs - currentMs) < 90000
+              );
+              if (!exists) {
                 this.currentCues.push(syntheticCue);
                 this.emitCaptions([syntheticCue]);
               }

@@ -3,22 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CodiReactor — Language Immersion for Video & Web</title>
+  <title>CodiReactor — Vocabulary Knowledge Base & Immersion Hub</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%23a855f7'/><text x='50' y='62' font-size='42' font-weight='800' fill='white' text-anchor='middle'>CR</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cairo:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cairo:wght@500;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #090d16;
-      --card-bg: rgba(18, 25, 42, 0.85);
-      --border: rgba(168, 85, 247, 0.25);
+      --bg: #111216;
+      --surface: #18191f;
+      --surface-hover: #22242c;
+      --card-bg: #1c1e26;
+      --border: #2a2d38;
       --purple: #a855f7;
       --purple-glow: #c084fc;
+      --mint: #4ade80;
+      --mint-glow: #86efac;
+      --orange: #fb923c;
       --cyan: #38bdf8;
-      --emerald: #10b981;
-      --text: #f8fafc;
+      --text: #f1f5f9;
       --text-muted: #94a3b8;
+      --text-dim: #64748b;
     }
 
     * {
@@ -37,79 +42,135 @@
       overflow-x: hidden;
     }
 
-    /* Navbar */
+    /* Top App Header (Matches ref/image copy 4.png) */
     header {
-      height: 64px;
-      padding: 0 32px;
+      height: 56px;
+      padding: 0 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(11, 15, 25, 0.8);
-      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      background: #14151b;
       position: sticky;
       top: 0;
       z-index: 100;
     }
 
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .menu-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 6px;
+    }
+
+    .menu-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
     .brand {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       font-weight: 800;
-      font-size: 20px;
-      letter-spacing: -0.02em;
+      font-size: 18px;
       color: #fff;
+      text-decoration: none;
     }
 
     .brand-icon {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
       background: linear-gradient(135deg, #a855f7, #6366f1);
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 800;
       font-size: 13px;
-      box-shadow: 0 0 16px rgba(168, 85, 247, 0.5);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
     }
 
-    nav {
+    .nav-tabs {
       display: flex;
-      gap: 8px;
+      align-items: center;
+      gap: 4px;
+      margin-left: 12px;
     }
 
-    .nav-btn {
-      background: none;
+    .nav-tab-btn {
+      background: transparent;
       border: none;
-      color: var(--text-muted);
-      font-size: 14px;
+      color: #9ca3af;
+      font-size: 13.5px;
       font-weight: 600;
-      padding: 8px 16px;
-      border-radius: 8px;
+      padding: 6px 14px;
+      border-radius: 6px;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
       transition: all 0.15s ease;
     }
 
-    .nav-btn:hover {
+    .nav-tab-btn:hover {
       color: #fff;
       background: rgba(255, 255, 255, 0.06);
     }
 
-    .nav-btn.active {
+    .nav-tab-btn.active {
       color: #fff;
-      background: rgba(168, 85, 247, 0.15);
-      border: 1px solid rgba(168, 85, 247, 0.3);
+      background: rgba(168, 85, 247, 0.16);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .tool-btn {
+      background: #1c1e26;
+      border: 1px solid var(--border);
+      color: #d1d5db;
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .tool-btn:hover {
+      color: #fff;
+      border-color: #4b5563;
+      background: #252833;
     }
 
     .cloud-pill {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 600;
-      padding: 6px 12px;
+      padding: 4px 10px;
       border-radius: 9999px;
       background: rgba(16, 185, 129, 0.12);
       border: 1px solid rgba(16, 185, 129, 0.3);
@@ -119,275 +180,582 @@
     /* Main Container */
     main {
       flex: 1;
-      max-width: 1200px;
+      max-width: 1400px;
       width: 100%;
       margin: 0 auto;
-      padding: 32px 24px;
+      padding: 16px 20px 48px;
     }
 
-    /* Hero Section */
-    .hero {
-      text-align: center;
-      padding: 48px 0 40px;
-    }
-
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 16px;
-      border-radius: 9999px;
-      background: rgba(168, 85, 247, 0.15);
-      border: 1px solid rgba(168, 85, 247, 0.35);
-      color: var(--purple-glow);
-      font-size: 13px;
-      font-weight: 700;
-      margin-bottom: 20px;
-    }
-
-    .hero h1 {
-      font-size: 48px;
-      font-weight: 800;
-      line-height: 1.15;
-      letter-spacing: -0.03em;
-      margin-bottom: 16px;
-      background: linear-gradient(135deg, #ffffff 40%, #c084fc 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .hero p {
-      font-size: 18px;
-      color: var(--text-muted);
-      max-width: 640px;
-      margin: 0 auto 32px;
-      line-height: 1.6;
-    }
-
-    .cta-group {
-      display: flex;
-      justify-content: center;
-      gap: 16px;
-      margin-bottom: 48px;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #a855f7, #6366f1);
-      color: #fff;
-      font-weight: 700;
-      font-size: 15px;
-      padding: 12px 28px;
-      border-radius: 10px;
-      border: none;
-      cursor: pointer;
-      box-shadow: 0 4px 20px rgba(168, 85, 247, 0.4);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 24px rgba(168, 85, 247, 0.6);
-    }
-
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.08);
-      color: #fff;
-      font-weight: 600;
-      font-size: 15px;
-      padding: 12px 24px;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.12);
-    }
-
-    /* Grid Cards */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 24px;
-      margin-top: 24px;
-    }
-
-    .card {
-      background: var(--card-bg);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 16px;
-      padding: 24px;
-      transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-
-    .card:hover {
-      transform: translateY(-2px);
-      border-color: rgba(168, 85, 247, 0.4);
-    }
-
-    .card-header {
+    /* Search Bar (Matches ref/image copy 4.png) */
+    .cr-search-bar-wrap {
       display: flex;
       align-items: center;
       gap: 12px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
-    .card-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
+    .cr-search-box {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .cr-search-input {
+      width: 100%;
+      background: #16171d;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 40px 9px 14px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .cr-search-input:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+    }
+
+    .cr-search-icon {
+      position: absolute;
+      right: 14px;
+      color: var(--text-dim);
+      font-size: 16px;
+      pointer-events: none;
+    }
+
+    /* Filter Badges Bar (Matches ref/image copy 4.png) */
+    .cr-filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+      transition: opacity 0.15s ease, transform 0.1s ease;
+    }
+
+    .badge-pill:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .badge-known {
+      background: #10b981;
+      color: #ffffff;
+      border: 1px solid #059669;
+    }
+
+    .badge-auto {
+      background: transparent;
+      color: #34d399;
+      border: 1px solid #10b981;
+    }
+
+    .badge-learning {
+      background: #f59e0b;
+      color: #ffffff;
+      border: 1px solid #d97706;
+    }
+
+    .badge-suggestions {
+      background: transparent;
+      color: #fbbf24;
+      border: 1px solid #f59e0b;
+    }
+
+    .badge-ignored {
+      background: #7c3aed;
+      color: #ffffff;
+      border: 1px solid #6d28d9;
+    }
+
+    .badge-rare {
+      background: transparent;
+      color: #c084fc;
+      border: 1px solid #a855f7;
+    }
+
+    .badge-sep {
+      width: 1px;
+      height: 16px;
+      background: #374151;
+      margin: 0 4px;
+    }
+
+    .badge-color-tag {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: #181920;
+      color: #9ca3af;
+      cursor: pointer;
+    }
+
+    .badge-color-tag.active {
+      border-color: #fff;
+      color: #fff;
+    }
+
+    /* Rank Section (Matches ref/image copy 4.png) */
+    .cr-rank-section {
+      margin-bottom: 28px;
+    }
+
+    .cr-rank-header {
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
-    }
-
-    .card-title {
-      font-size: 18px;
+      gap: 8px;
+      font-size: 12.5px;
       font-weight: 700;
+      color: #9ca3af;
+      letter-spacing: 0.03em;
+      margin-bottom: 12px;
+      position: relative;
     }
 
-    .card-desc {
-      font-size: 14px;
-      color: var(--text-muted);
-      line-height: 1.5;
-      margin-bottom: 20px;
+    .cr-rank-header::before,
+    .cr-rank-header::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #262935;
     }
 
-    /* Flashcard SRS preview */
-    .flashcard-box {
-      background: #0f172a;
-      border: 1px solid rgba(168, 85, 247, 0.3);
-      border-radius: 12px;
-      padding: 24px;
+    .cr-rank-book-btn {
+      background: #1f212a;
+      border: 1px solid #374151;
+      color: #d1d5db;
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .cr-rank-book-btn:hover {
+      background: #2a2d39;
+      color: #fff;
+    }
+
+    /* Word Matrix Grid (10 Columns matching ref/image copy 4.png) */
+    .cr-words-grid-10 {
+      display: grid;
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+      gap: 4px 10px;
+      background: #121318;
+      border: 1px solid #1f2128;
+      border-radius: 8px;
+      padding: 14px 12px;
+    }
+
+    @media (max-width: 1100px) {
+      .cr-words-grid-10 {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 650px) {
+      .cr-words-grid-10 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    /* Word Cell */
+    .cr-word-cell {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 6px;
+      border-radius: 4px;
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.12s ease;
+      min-height: 28px;
+    }
+
+    .cr-word-cell:hover {
+      background: #232631;
+    }
+
+    .cr-word-cell.focused {
+      background: #2d3140;
+      box-shadow: 0 0 0 1px var(--purple);
+    }
+
+    /* Word Status Colors */
+    .cr-word-cell.status-known {
+      color: #4ade80 !important;
+    }
+
+    .cr-word-cell.status-auto {
+      color: #7df9c2 !important;
+    }
+
+    .cr-word-cell.status-learning {
+      color: #fb923c !important;
+    }
+
+    .cr-word-cell.status-ignored {
+      color: #64748b !important;
+      text-decoration: line-through;
+    }
+
+    .cr-word-cell.status-suggested {
+      color: #e2e8f0;
+    }
+
+    .cr-word-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Quick Marks Menu (Numbers 1-9 on hover/focus - Matches woman in ref/image copy 4.png) */
+    .cr-marks-column {
+      display: none;
+      position: absolute;
+      right: -24px;
+      top: -4px;
+      background: #1e2029;
+      border: 1px solid #3f4453;
+      border-radius: 4px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+      flex-direction: column;
+      z-index: 50;
+      padding: 2px;
+    }
+
+    .cr-word-cell:hover .cr-marks-column,
+    .cr-word-cell.focused .cr-marks-column {
+      display: flex;
+    }
+
+    .cr-mark-num {
+      font-size: 10px;
+      font-weight: 700;
+      color: #94a3b8;
+      padding: 2px 5px;
+      cursor: pointer;
+      border-radius: 2px;
       text-align: center;
-      margin-bottom: 16px;
+      line-height: 1.1;
+      transition: all 0.1s ease;
     }
 
-    .fc-word {
-      font-size: 28px;
+    .cr-mark-num:hover {
+      background: var(--purple);
+      color: #fff;
+    }
+
+    .cr-mark-num.m1:hover { background: #10b981; }
+    .cr-mark-num.m2:hover { background: #f59e0b; }
+    .cr-mark-num.m3:hover { background: #64748b; }
+
+    /* Dictionary Modal Popover */
+    .cr-modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .cr-modal-backdrop.open {
+      display: flex;
+    }
+
+    .cr-modal-card {
+      background: #181a22;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 460px;
+      padding: 22px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7);
+    }
+
+    .cr-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .cr-modal-word {
+      font-size: 24px;
       font-weight: 800;
       color: #fff;
-      margin-bottom: 6px;
     }
 
-    .fc-trans {
+    .cr-modal-close {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .cr-modal-close:hover {
+      color: #fff;
+    }
+
+    .cr-modal-trans {
       font-size: 20px;
       font-weight: 700;
       color: #38bdf8;
       font-family: 'Cairo', sans-serif;
       direction: rtl;
-    }
-
-    .fc-buttons {
-      display: flex;
-      gap: 8px;
-      justify-content: center;
-    }
-
-    .fc-btn {
-      flex: 1;
-      padding: 8px 4px;
+      margin-bottom: 16px;
+      padding: 8px 12px;
+      background: #121319;
       border-radius: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      border: none;
-      cursor: pointer;
+      border-right: 3px solid #38bdf8;
     }
 
-    .fc-again { background: #ef4444; color: #fff; }
-    .fc-hard { background: #f59e0b; color: #fff; }
-    .fc-good { background: #10b981; color: #fff; }
-    .fc-easy { background: #3b82f6; color: #fff; }
+    .cr-modal-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .cr-modal-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .cr-action-btn {
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-mark-known { background: #065f46; color: #34d399; }
+    .btn-mark-known:hover { background: #047857; color: #fff; }
+    .btn-mark-learn { background: #78350f; color: #fde047; }
+    .btn-mark-learn:hover { background: #92400e; color: #fff; }
+    .btn-mark-ignore { background: #374151; color: #9ca3af; }
+    .btn-mark-ignore:hover { background: #4b5563; color: #fff; }
+    .btn-tts { background: #3b0764; color: #c084fc; }
+    .btn-tts:hover { background: #581c87; color: #fff; }
+
+    /* Saved View Tables */
+    .saved-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      background: #16171d;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .saved-table th,
+    .saved-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid #232631;
+    }
+
+    .saved-table th {
+      background: #1a1c24;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .saved-table td {
+      font-size: 13.5px;
+    }
   </style>
 </head>
 <body>
+  <!-- Header (Matches ref/image copy 4.png) -->
   <header>
-    <div class="brand">
-      <div class="brand-icon">CR</div>
-      <span>CodiReactor</span>
+    <div class="header-left">
+      <button class="menu-btn" title="Menu">☰</button>
+      <a href="#" class="brand">
+        <div class="brand-icon">CR</div>
+        <span>CodiReactor</span>
+      </a>
+      <div class="nav-tabs">
+        <button class="nav-tab-btn active" id="tab-vocab">
+          <span>📚</span> Vocabulary
+        </button>
+        <button class="nav-tab-btn" id="tab-saved-words">
+          <span>🔖</span> Saved Words
+        </button>
+        <button class="nav-tab-btn" id="tab-saved-phrases">
+          <span>⭐</span> Saved Phrases
+        </button>
+        <button class="nav-tab-btn" id="tab-srs">
+          <span>⚡</span> PhrasePump SRS
+        </button>
+      </div>
     </div>
-    <nav>
-      <button class="nav-btn active" id="nav-hub">Immersion Hub</button>
-      <button class="nav-btn" id="nav-srs">PhrasePump SRS</button>
-      <button class="nav-btn" id="nav-notebook">Notebook</button>
-      <button class="nav-btn" id="nav-chat">Aria AI</button>
-    </nav>
-    <div class="cloud-pill">
-      <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981;"></span>
-      <span>Supabase Connected</span>
+
+    <div class="header-right">
+      <button class="tool-btn" id="btn-export">
+        <span>📤</span> Export
+      </button>
+      <button class="tool-btn" id="btn-settings">
+        <span>⚙️</span>
+      </button>
+      <button class="tool-btn" id="btn-speed" title="Mastery Level">
+        <span>1x</span>
+      </button>
+      <div class="cloud-pill">
+        <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#10b981;"></span>
+        <span>Supabase Connected</span>
+      </div>
     </div>
   </header>
 
+  <!-- Main Content Area -->
   <main>
-    <section class="hero">
-      <div class="hero-badge">⚡ Video Immersion Platform v2.0</div>
-      <h1>Master Any Language<br>Directly from Real Videos</h1>
-      <p>Dual interactive subtitles, instant Arabic word hover translations, SM-2 flashcard reviews, and seamless Supabase cloud synchronization across all your devices.</p>
-      <div class="cta-group">
-        <button class="btn-primary" onclick="alert('CodiReactor Extension is loaded and running on YouTube!')">Open Video Player</button>
-        <button class="btn-secondary" onclick="window.open('https://github.com/Codi-Corp/CodiReactor', '_blank')">View on GitHub</button>
+    <!-- View 1: Vocabulary Knowledge Base (Matches ref/image copy 4.png) -->
+    <section id="view-vocab" class="view-panel">
+      <!-- Search Bar -->
+      <div class="cr-search-bar-wrap">
+        <div class="cr-search-box">
+          <input type="text" id="vocab-search" class="cr-search-input" placeholder="Search words in knowledge base..." autocomplete="off" />
+          <span class="cr-search-icon">🔍</span>
+        </div>
+      </div>
+
+      <!-- Filter Badges Bar (Matches ref/image copy 4.png) -->
+      <div class="cr-filter-bar">
+        <span class="badge-pill badge-known" id="badge-known" title="Words explicitly marked as Known">
+          ✓ Known <span id="count-known">0</span>
+        </span>
+        <span class="badge-pill badge-auto" id="badge-auto" title="High-frequency words automatically known based on user level">
+          Auto <span id="count-auto">700</span>
+        </span>
+        <span class="badge-pill badge-learning" id="badge-learning" title="Words currently being learned">
+          📖 Learning <span id="count-learning">0</span>
+        </span>
+        <span class="badge-pill badge-suggestions" id="badge-suggestions" title="Recommended words to learn next">
+          Suggestions <span id="count-suggestions">814</span>
+        </span>
+        <span class="badge-pill badge-ignored" id="badge-ignored" title="Words marked as don't learn / ignore">
+          🚫 Don't learn <span id="count-ignored">0</span>
+        </span>
+        <span class="badge-pill badge-rare" id="badge-rare" title="Advanced and rare vocabulary">
+          Rare <span id="count-rare">6485</span>
+        </span>
+
+        <span class="badge-sep"></span>
+
+        <!-- Color Tag Filters (CEFR) -->
+        <button class="badge-color-tag active" data-filter="all">[/]</button>
+        <button class="badge-color-tag" data-filter="A1" style="color: #4ade80;"># A1</button>
+        <button class="badge-color-tag" data-filter="A2" style="color: #a3e635;"># A2</button>
+        <button class="badge-color-tag" data-filter="B1" style="color: #fb923c;"># B1</button>
+        <button class="badge-color-tag" data-filter="B2" style="color: #c084fc;"># B2</button>
+        <button class="badge-color-tag" data-filter="C1" style="color: #38bdf8;"># C1</button>
+      </div>
+
+      <!-- Ranked Knowledge Matrix Sections -->
+      <div id="vocab-matrix-container">
+        <!-- Rendered dynamically by src/main.ts -->
       </div>
     </section>
 
-    <div class="grid">
-      <!-- Card 1: PhrasePump SRS -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon" style="background: rgba(168,85,247,0.15); color: #c084fc;">⚡</div>
-          <div class="card-title">PhrasePump Reviewer</div>
+    <!-- View 2: Saved Words -->
+    <section id="view-saved-words" class="view-panel" style="display: none;">
+      <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 12px;">Saved Vocabulary</h2>
+      <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">Words you have bookmarked, marked to learn, or saved from video immersion sessions.</p>
+      <div id="saved-words-table-container">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- View 3: Saved Phrases -->
+    <section id="view-saved-phrases" class="view-panel" style="display: none;">
+      <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 12px;">Saved Subtitle Phrases</h2>
+      <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">Key sentences captured from YouTube and video players with synchronized Arabic translations.</p>
+      <div id="saved-phrases-container">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- View 4: PhrasePump SRS -->
+    <section id="view-srs" class="view-panel" style="display: none;">
+      <div style="max-width: 520px; margin: 32px auto; text-align: center;">
+        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 8px;">PhrasePump SRS Reviewer</h2>
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 24px;">SuperMemo SM-2 spaced repetition schedules optimal review intervals.</p>
+        <div id="srs-card" style="background: #181a24; border: 1px solid var(--border); border-radius: 12px; padding: 32px 24px; margin-bottom: 20px;">
+          <div id="srs-card-word" style="font-size: 32px; font-weight: 800; color: #fff; margin-bottom: 12px;">resilience</div>
+          <div id="srs-card-trans" style="font-size: 22px; font-weight: 700; color: #38bdf8; font-family: 'Cairo', sans-serif; direction: rtl; margin-bottom: 16px;">المرونة والصمود</div>
+          <div id="srs-card-example" style="font-size: 13.5px; color: var(--text-muted); font-style: italic;">"She showed great resilience in the face of adversity."</div>
         </div>
-        <p class="card-desc">SuperMemo SM-2 spaced repetition algorithm schedules saved phrases at optimal intervals.</p>
-        <div class="flashcard-box">
-          <div class="fc-word">resilience</div>
-          <div class="fc-trans">المرونة والصمود</div>
-        </div>
-        <div class="fc-buttons">
-          <button class="fc-btn fc-again">Again (1d)</button>
-          <button class="fc-btn fc-hard">Hard (3d)</button>
-          <button class="fc-btn fc-good">Good (6d)</button>
-          <button class="fc-btn fc-easy">Easy (12d)</button>
+        <div style="display: flex; gap: 8px; justify-content: center;">
+          <button class="cr-action-btn" style="background:#ef4444; color:#fff;" id="srs-btn-again">Again (1d)</button>
+          <button class="cr-action-btn" style="background:#f59e0b; color:#fff;" id="srs-btn-hard">Hard (3d)</button>
+          <button class="cr-action-btn" style="background:#10b981; color:#fff;" id="srs-btn-good">Good (6d)</button>
+          <button class="cr-action-btn" style="background:#3b82f6; color:#fff;" id="srs-btn-easy">Easy (12d)</button>
         </div>
       </div>
+    </section>
+  </main>
 
-      <!-- Card 2: Dual Subtitles & Lexicon -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon" style="background: rgba(56,189,248,0.15); color: #38bdf8;">🌐</div>
-          <div class="card-title">Dual Subtitles & Lexicon</div>
-        </div>
-        <p class="card-desc">Target language subtitles with automatic Arabic translations and CEFR frequency progress bars on hover.</p>
-        <div style="background: #0f172a; border-radius: 8px; padding: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.08);">
-          <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">listening skills</div>
-          <div style="font-size: 15px; color: #38bdf8; font-family: 'Cairo', sans-serif; direction: rtl;">مهارات الاستماع</div>
-        </div>
+  <!-- Word Dictionary Modal -->
+  <div class="cr-modal-backdrop" id="dict-modal">
+    <div class="cr-modal-card">
+      <div class="cr-modal-header">
+        <div class="cr-modal-word" id="modal-word-title">Word</div>
+        <button class="cr-modal-close" id="modal-close-btn">✖</button>
       </div>
-
-      <!-- Card 3: Cloud Database -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon" style="background: rgba(16,185,129,0.15); color: #10b981;">☁️</div>
-          <div class="card-title">Supabase Cloud Sync</div>
-        </div>
-        <p class="card-desc">Fully configured with project <code>gzbsoomvlikjjxirzjfm.supabase.co</code> for cross-platform vocabulary sync.</p>
-        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
-          <div style="display:flex; justify-content:space-between; color: var(--text-muted);">
-            <span>Cloud Database:</span>
-            <span style="color:#10b981; font-weight:600;">Active</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; color: var(--text-muted);">
-            <span>Vocabulary Stored:</span>
-            <span style="color:#fff; font-weight:600;">Realtime Sync</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; color: var(--text-muted);">
-            <span>Target Level:</span>
-            <span style="color:#c084fc; font-weight:600;">CEFR B2-C1</span>
-          </div>
-        </div>
+      <div class="cr-modal-meta">
+        <span id="modal-word-rank">Rank: 1</span>
+        <span id="modal-word-cefr">CEFR: A1</span>
+        <span id="modal-word-pos">POS: noun</span>
+      </div>
+      <div class="cr-modal-trans" id="modal-word-trans">الترجمة بالعربية</div>
+      <div class="cr-modal-actions">
+        <button class="cr-action-btn btn-mark-known" id="btn-modal-known">✓ Known (1)</button>
+        <button class="cr-action-btn btn-mark-learn" id="btn-modal-learn">📖 Learn (2)</button>
+        <button class="cr-action-btn btn-mark-ignore" id="btn-modal-ignore">🚫 Ignore (3)</button>
+        <button class="cr-action-btn btn-tts" id="btn-modal-speak">🔊 Audio</button>
       </div>
     </div>
-  </main>
+  </div>
 
   <script type="module" src="./src/main.ts"></script>
 </body>
