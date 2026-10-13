@@ -25,6 +25,7 @@ export class ServiceWorkerController {
 
     this.registerHandlers();
     this.setupContextMenus();
+    this.setupActionLauncher();
   }
 
   /**
@@ -160,6 +161,25 @@ export class ServiceWorkerController {
           type: 'ACTIVATE_WEB_READER',
           payload: {},
         });
+      }
+    });
+  }
+
+  /**
+   * Listen for extension icon clicks in Chrome toolbar.
+   * Directly opens the CodiReactor web app (e.g. deployed on Vercel) in a new tab.
+   */
+  private setupActionLauncher(): void {
+    if (typeof chrome === 'undefined' || !chrome.action || !chrome.action.onClicked) return;
+
+    chrome.action.onClicked.addListener(async () => {
+      const DEFAULT_URL = 'https://codireactor.vercel.app';
+      try {
+        const stored = await chrome.storage.local.get('cr_webapp_url');
+        const targetUrl = stored?.cr_webapp_url || DEFAULT_URL;
+        chrome.tabs.create({ url: targetUrl });
+      } catch {
+        chrome.tabs.create({ url: DEFAULT_URL });
       }
     });
   }

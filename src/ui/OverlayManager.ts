@@ -400,12 +400,23 @@ export class OverlayManager {
     const translations = await getQuickWordTranslation(word, 'ar');
     if (!translations || translations.length === 0) return;
 
+    // Ensure all translations are genuine Arabic and not the English word
+    const validTranslations = translations.filter((tr) => {
+      const cleanTr = tr.trim();
+      return cleanTr.length > 0 && cleanTr.toLowerCase() !== word.toLowerCase() && /[\u0600-\u06FF]/.test(cleanTr);
+    });
+    if (validTranslations.length === 0) return;
+
     this.hoverBalloon = document.createElement('div');
     this.hoverBalloon.className = 'cr-hover-balloon';
 
     const transWrapper = document.createElement('div');
     transWrapper.className = 'cr-balloon-translations';
-    translations.slice(0, 3).forEach((tr) => {
+    transWrapper.setAttribute('dir', 'rtl');
+    transWrapper.setAttribute('lang', 'ar');
+    transWrapper.style.direction = 'rtl';
+    transWrapper.style.textAlign = 'right';
+    validTranslations.slice(0, 3).forEach((tr) => {
       const line = document.createElement('div');
       line.textContent = tr;
       transWrapper.appendChild(line);

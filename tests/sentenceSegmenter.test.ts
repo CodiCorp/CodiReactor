@@ -3,10 +3,16 @@ import { cleanSubtitleText, splitIntoSentences, consolidateAndSegmentCues } from
 import { SubtitleCue } from '../src/core/types';
 
 describe('SentenceSegmenter', () => {
-  it('cleans subtitle text from music and sound effects tags', () => {
-    const raw = "I I'm [music] brought to you live [applause] for an announcement.";
+  it('cleans subtitle text from music tags, speaker arrows and ASR stutters', () => {
+    const raw = ">> That's a That's a T-Rex. [music] >> How did How did they make this?";
     const cleaned = cleanSubtitleText(raw);
-    expect(cleaned).toBe("I I'm brought to you live for an announcement.");
+    expect(cleaned).toBe("That's a T-Rex. How did they make this?");
+  });
+
+  it('cleans pronoun stutters like I I\'m', () => {
+    const raw = "I I'm brought to you live for an announcement.";
+    const cleaned = cleanSubtitleText(raw);
+    expect(cleaned).toBe("I'm brought to you live for an announcement.");
   });
 
   it('splits paragraphs into distinct sentences', () => {
@@ -30,5 +36,26 @@ describe('SentenceSegmenter', () => {
     expect(result[0].text).toBe("I'm going to talk to you about a variety of different topics.");
     expect(result[0].startMs).toBe(1000);
     expect(result[0].endMs).toBe(4000);
+  });
+
+  it('completely eliminates duplicated blocks of sentences (Image 1 fix)', () => {
+    // Simulating identical block re-emitted by loop or duplicate observer
+    const duplicatedBlock: SubtitleCue[] = [
+      { id: '1', startMs: 1000, endMs: 2500, text: "Are they high?" },
+      { id: '2', startMs: 3000, endMs: 4500, text: "Why do I like it?" },
+      { id: '3', startMs: 5000, endMs: 6500, text: "Oh my god, this model." },
+      // Duplicate block arrives:
+      { id: '4', startMs: 1200, endMs: 2700, text: "Are they high?" },
+      { id: '5', startMs: 3100, endMs: 4600, text: "Why do I like it?" },
+      { id: '6', startMs: 5200, endMs: 6700, text: "Oh my god, this model." },
+    ];
+
+    const result = consolidateAndSegmentCues(duplicatedBlock);
+    expect(result).toHaveLength(3);
+    expect(result.map(r => r.text)).toEqual([
+      "Are they high?",
+      "Why do I like it?",
+      "Oh my god, this model.",
+    ]);
   });
 });

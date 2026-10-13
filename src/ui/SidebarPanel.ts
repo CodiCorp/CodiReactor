@@ -524,36 +524,39 @@ export class SidebarPanel {
     wordEl.style.cssText = 'color: #ffffff; font-weight: 500;';
     wordEl.textContent = word;
 
-    const transEl = document.createElement('span');
-    transEl.style.cssText = 'color: #cccccc; direction: rtl; margin-left: auto;';
-    transEl.textContent = `: ${wordTrans.slice(0, 3).join(', ')}`;
+    if (wordTrans && wordTrans.length > 0) {
+      const transEl = document.createElement('span');
+      transEl.style.cssText = 'color: #cccccc; direction: rtl; margin-left: auto;';
+      transEl.textContent = `: ${wordTrans.slice(0, 3).join(', ')}`;
+      line2.appendChild(transEl);
+    }
 
     line2.appendChild(bar);
     line2.appendChild(wordEl);
-    line2.appendChild(transEl);
     this.hoverCardEl.appendChild(line2);
 
-    // Divider
-    const divider = document.createElement('div');
-    divider.style.cssText = `
-      height: 1px !important;
-      background: rgba(255, 255, 255, 0.15) !important;
-      margin: 6px 0 8px 0 !important;
-    `;
-    this.hoverCardEl.appendChild(divider);
+    // Divider and Line 3 if Arabic sentence translation exists
+    if (sentenceTrans) {
+      const divider = document.createElement('div');
+      divider.style.cssText = `
+        height: 1px !important;
+        background: rgba(255, 255, 255, 0.15) !important;
+        margin: 6px 0 8px 0 !important;
+      `;
+      this.hoverCardEl.appendChild(divider);
 
-    // Line 3: Full sentence translation in Arabic
-    const line3 = document.createElement('div');
-    line3.style.cssText = `
-      color: #e5e5e5 !important;
-      direction: rtl !important;
-      text-align: right !important;
-      font-size: 13.5px !important;
-      line-height: 1.4 !important;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Cairo", "Noto Sans Arabic", sans-serif !important;
-    `;
-    line3.textContent = sentenceTrans || sentence;
-    this.hoverCardEl.appendChild(line3);
+      const line3 = document.createElement('div');
+      line3.style.cssText = `
+        color: #e5e5e5 !important;
+        direction: rtl !important;
+        text-align: right !important;
+        font-size: 13.5px !important;
+        line-height: 1.4 !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Cairo", "Noto Sans Arabic", sans-serif !important;
+      `;
+      line3.textContent = sentenceTrans;
+      this.hoverCardEl.appendChild(line3);
+    }
 
     // Position the hover card to the left of the anchor
     const rect = anchorEl.getBoundingClientRect();

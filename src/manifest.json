@@ -62,7 +62,6 @@
     }
   ],
   "action": {
-    "default_title": "CodiReactor Controls",
-    "default_popup": "popup/index.html"
+    "default_title": "Open CodiReactor Web App"
   }
 }

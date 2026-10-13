@@ -18,6 +18,88 @@ const sentenceCache = new Map<string, string>();
 
 // Seed dictionary for top English-to-Arabic high-frequency words for instantaneous offline hover
 const SEED_EN_AR: Record<string, string[]> = {
+  // Common determiners & pronouns
+  a: ['أداة تنكير', 'واحد', 'أي'],
+  an: ['أداة تنكير', 'واحد'],
+  the: ['الـ', 'أداة تعريف'],
+  that: ['ذلك', 'تلك', 'أن'],
+  "that's": ['ذلك هو', 'هذا'],
+  this: ['هذا', 'هذه'],
+  it: ['هو', 'هي', 'ذلك'],
+  is: ['يكون', 'هو', 'هي'],
+  are: ['يكونون', 'هم', 'نكون'],
+  am: ['أكون', 'أنا'],
+  was: ['كان', 'كانت'],
+  were: ['كانوا', 'كنا'],
+  be: ['يكون', 'كن'],
+  been: ['كان', 'موجوداً'],
+  i: ['أنا'],
+  "i'm": ['أنا', 'أنا أكون'],
+  you: ['أنت', 'أنتم', 'أنتِ'],
+  we: ['نحن'],
+  they: ['هم', 'هن'],
+  he: ['هو'],
+  she: ['هي'],
+  my: ['لي', 'خاصتي'],
+  your: ['لك', 'خاصتك'],
+  his: ['له'],
+  her: ['لها'],
+  their: ['لهم'],
+  our: ['لنا'],
+
+  // Question words & conjunctions
+  what: ['ماذا', 'ما', 'ما الذي'],
+  why: ['لماذا', 'لِمَ'],
+  how: ['كيف', 'بأي طريقة'],
+  where: ['أين', 'حيث'],
+  when: ['متى', 'عندما'],
+  who: ['من', 'الذي'],
+  which: ['أي', 'أيهما', 'التي'],
+  and: ['و', 'مع'],
+  or: ['أو', 'أم'],
+  but: ['لكن', 'ولكن'],
+  so: ['لذا', 'لذلك', 'جداً'],
+  for: ['لأجل', 'من أجل', 'لمدة'],
+  with: ['مع', 'بواسطة', 'برفقة'],
+  on: ['على', 'فوق', 'في'],
+  in: ['في', 'داخل'],
+  at: ['في', 'عند'],
+  to: ['إلى', 'أن'],
+  from: ['من', 'عن'],
+  by: ['بواسطة', 'بجانب', 'قبل'],
+  about: ['عن', 'حول', 'تقريباً'],
+
+  // Video and stream vocabulary
+  high: ['مرتفع', 'عالي', 'في حالة نشوة'],
+  like: ['يعجب', 'يحب', 'مثل'],
+  god: ['الله', 'إله'],
+  oh: ['أوه', 'يا'],
+  model: ['نموذج', 'طراز', 'موديل'],
+  brought: ['جلب', 'أحضر', 'قُدّم'],
+  live: ['مباشر', 'حي', 'يعيش'],
+  special: ['خاص', 'مميز', 'استثنائي'],
+  emergency: ['طوارئ', 'حالة طارئة'],
+  announcement: ['إعلان', 'بيان رسمى'],
+  stream: ['بث مباشر', 'تيار', 'تدفق'],
+  team: ['فريق', 'طاقم'],
+  released: ['أطلق', 'أصدر', 'نشر'],
+  release: ['إطلاق', 'إصدار', 'تحرير'],
+  fable: ['أسطورة', 'خرافة'],
+  killer: ['قاتل', 'مدمر', 'كاسح'],
+  internet: ['الإنترنت', 'الشبكة العالمية'],
+  absolute: ['مطلق', 'كامل', 'تام'],
+  uproar: ['ضجة', 'صخب', 'هياج'],
+  creature: ['مخلوق', 'كائن حي'],
+  supposed: ['من المفترض', 'مفترض'],
+  score: ['سجل', 'درجة', 'نتيجة'],
+  benchmark: ['معيار', 'مقياس الأداء'],
+  well: ['جيداً', 'بشكل جيد', 'حسناً'],
+  rex: ['ريكس', 'ملك'],
+  "t-rex": ['تي ريكس', 'تيرانوصور'],
+  did: ['فعل', 'قام بـ'],
+  make: ['يجعل', 'يصنع', 'يقوم بـ'],
+
+  // Learning and general conversation
   listening: ['استمع', 'يستمع', 'الاستماع'],
   listen: ['استمع', 'ينصت', 'استماع'],
   chance: ['فرصة', 'احتمال', 'حظ'],
@@ -74,13 +156,20 @@ const SEED_COLLOCATIONS: Record<string, { text: string; translation: string }> =
 };
 
 /**
+ * Check if a string contains Arabic characters.
+ */
+function containsArabic(str: string): boolean {
+  return /[\u0600-\u06FF]/.test(str);
+}
+
+/**
  * Translate a single word into the target native language (default: Arabic).
  */
 export async function getQuickWordTranslation(
   word: string,
   targetLang: string = 'ar',
 ): Promise<string[]> {
-  const clean = word.toLowerCase().trim().replace(/^[^\w]+|[^\w]+$/g, '');
+  const clean = word.toLowerCase().trim().replace(/^[^\w']+|[^\w']+$/g, '');
   if (!clean) return [];
 
   // Check cache
@@ -96,34 +185,68 @@ export async function getQuickWordTranslation(
     return res;
   }
 
-  // Fetch online from MyMemory API with timeout
+  const results: string[] = [];
+
+  // Strategy 1: Google Translate GTX endpoint (ultra-fast, highly reliable)
   try {
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|${targetLang}`;
-    const resp = await fetch(url, { signal: AbortSignal.timeout(2500) });
+    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${targetLang}&dt=t&q=${encodeURIComponent(clean)}`;
+    const resp = await fetch(gtxUrl, { signal: AbortSignal.timeout(2000) });
     if (resp.ok) {
       const data = await resp.json();
-      const list: string[] = [];
-      if (data?.responseData?.translatedText) {
-        list.push(data.responseData.translatedText);
-      }
-      if (Array.isArray(data?.matches)) {
-        for (const m of data.matches.slice(0, 4)) {
-          const t = m.translation?.trim();
-          if (t && !list.includes(t) && t !== clean && t.length < 35) {
-            list.push(t);
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        for (const item of data[0]) {
+          const trans = item?.[0]?.trim();
+          if (trans && trans.toLowerCase() !== clean) {
+            if (targetLang !== 'ar' || containsArabic(trans)) {
+              if (!results.includes(trans)) results.push(trans);
+            }
           }
         }
       }
-      if (list.length > 0) {
-        translationCache.set(cacheKey, list);
-        return list;
-      }
     }
   } catch {
-    // Graceful fallback
+    // Fall through to MyMemory
   }
 
-  // Fallback to title case of word
+  // Strategy 2: MyMemory API backup
+  if (results.length < 2) {
+    try {
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|${targetLang}`;
+      const resp = await fetch(url, { signal: AbortSignal.timeout(2000) });
+      if (resp.ok) {
+        const data = await resp.json();
+        const mainTrans = data?.responseData?.translatedText?.trim();
+        if (mainTrans && mainTrans.toLowerCase() !== clean) {
+          if (targetLang !== 'ar' || containsArabic(mainTrans)) {
+            if (!results.includes(mainTrans)) results.push(mainTrans);
+          }
+        }
+        if (Array.isArray(data?.matches)) {
+          for (const m of data.matches.slice(0, 3)) {
+            const t = m.translation?.trim();
+            if (t && !results.includes(t) && t.toLowerCase() !== clean && t.length < 35) {
+              if (targetLang !== 'ar' || containsArabic(t)) {
+                results.push(t);
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Graceful fallback
+    }
+  }
+
+  if (results.length > 0) {
+    translationCache.set(cacheKey, results);
+    return results;
+  }
+
+  // For Arabic, NEVER return English fallback words! Return empty so we don't display English in Arabic tooltips.
+  if (targetLang === 'ar') {
+    return [];
+  }
+
   return [clean];
 }
 
@@ -142,15 +265,38 @@ export async function getSentenceTranslation(
     return sentenceCache.get(cacheKey)!;
   }
 
+  // Strategy 1: Google Translate GTX endpoint (ultra-fast sentence translation)
+  try {
+    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${targetLang}&dt=t&q=${encodeURIComponent(clean)}`;
+    const resp = await fetch(gtxUrl, { signal: AbortSignal.timeout(2500) });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        const translated = data[0].map((item: any) => item?.[0] || '').join('').trim();
+        if (translated && translated.toLowerCase() !== clean.toLowerCase()) {
+          if (targetLang !== 'ar' || containsArabic(translated)) {
+            sentenceCache.set(cacheKey, translated);
+            return translated;
+          }
+        }
+      }
+    }
+  } catch {
+    // Fall through to MyMemory
+  }
+
+  // Strategy 2: MyMemory API backup
   try {
     const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|${targetLang}`;
-    const resp = await fetch(url, { signal: AbortSignal.timeout(3500) });
+    const resp = await fetch(url, { signal: AbortSignal.timeout(2500) });
     if (resp.ok) {
       const data = await resp.json();
       const translated = data?.responseData?.translatedText?.trim();
-      if (translated && translated !== clean) {
-        sentenceCache.set(cacheKey, translated);
-        return translated;
+      if (translated && translated.toLowerCase() !== clean.toLowerCase()) {
+        if (targetLang !== 'ar' || containsArabic(translated)) {
+          sentenceCache.set(cacheKey, translated);
+          return translated;
+        }
       }
     }
   } catch {

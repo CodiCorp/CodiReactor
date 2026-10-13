@@ -7,14 +7,34 @@
 import { SubtitleCue } from '../types';
 
 /**
- * Clean common YouTube ASR noise like [music], [applause], etc.
+ * Clean common YouTube ASR noise:
+ * - [music], [applause], brackets
+ * - Speaker direction indicators (>>, >)
+ * - Speech recognition stutter word/phrase repetitions ("That's a That's a", "How did How did", "I I'm I'm")
  */
 export function cleanSubtitleText(text: string): string {
-  return text
-    .replace(/\[(?:music|applause|laughter|snicker|cheering|ambient)\]/gi, '')
+  if (!text) return '';
+
+  let cleaned = text
+    .replace(/\[(?:music|applause|laughter|snicker|cheering|ambient|noise)\]/gi, '')
     .replace(/\((?:music|applause|laughter)\)/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+    // Remove speaker indicators (>> or >)
+    .replace(/^>+\s*/, '')
+    .replace(/\s+>+\s*/g, ' ')
+    // Normalize spaces before punctuation
+    .replace(/\s+([.,!?;:])/g, '$1');
+
+  // Remove stutter repetition of 2-word phrases: "That's a That's a" -> "That's a"
+  cleaned = cleaned.replace(/\b([a-zA-Z']+\s+[a-zA-Z']+)\s+\1\b/gi, '$1');
+
+  // Remove stutter repetition of single words: "How did How did" or "word word"
+  cleaned = cleaned.replace(/\b([a-zA-Z']+)\s+\1\b/gi, '$1');
+  cleaned = cleaned.replace(/\b([a-zA-Z']+)\s+\1\b/gi, '$1');
+
+  // Remove common ASR pronoun stutter: "I I'm" -> "I'm"
+  cleaned = cleaned.replace(/\bI\s+I'm\b/gi, "I'm");
+
+  return cleaned.replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -39,16 +59,34 @@ export function splitIntoSentences(text: string): string[] {
 
 /**
  * Consolidates rolling ASR cues into discrete, sentence-by-sentence cues.
- * Prevents "typewriter style" repetition where each new word creates a duplicate cue.
+ * Completely eliminates:
+ * 1. Rolling "typewriter style" cumulative duplicates.
+ * 2. Block/stream duplicates when cues are re-emitted or looped.
+ * 3. Incomplete sentence fragments.
  */
 export function consolidateAndSegmentCues(rawCues: SubtitleCue[]): SubtitleCue[] {
   if (!rawCues || rawCues.length === 0) return [];
 
+  // 1. Sort all incoming cues chronologically by start timestamp
+  const sorted = [...rawCues].sort((a, b) => a.startMs - b.startMs);
   const consolidated: SubtitleCue[] = [];
 
-  for (const raw of rawCues) {
+  for (const raw of sorted) {
     const cleanedText = cleanSubtitleText(raw.text);
-    if (!cleanedText) continue;
+    if (!cleanedText || cleanedText.length < 2) continue;
+
+    // Check if a cue with identical or near-identical text already exists within +/- 20 seconds
+    const existingIndex = consolidated.findIndex(existing => {
+      const sameText = existing.text.toLowerCase() === cleanedText.toLowerCase();
+      const closeTime = Math.abs(existing.startMs - raw.startMs) < 20000;
+      return sameText && closeTime;
+    });
+
+    if (existingIndex !== -1) {
+      // Merge end time if the new cue has longer duration, and skip duplicate row
+      consolidated[existingIndex].endMs = Math.max(consolidated[existingIndex].endMs, raw.endMs);
+      continue;
+    }
 
     if (consolidated.length === 0) {
       consolidated.push({
@@ -63,7 +101,7 @@ export function consolidateAndSegmentCues(rawCues: SubtitleCue[]): SubtitleCue[]
 
     const last = consolidated[consolidated.length - 1];
 
-    // Case 1: The new cue is an extension of the last cue (YouTube progressive/rolling ASR)
+    // Case 1: The new cue extends the last cue (YouTube progressive/rolling ASR)
     // Example: last = "I'm going to give you a chance", new = "I'm going to give you a chance to practice"
     if (cleanedText.startsWith(last.text) || (last.text.length > 15 && cleanedText.includes(last.text.slice(0, 20)))) {
       last.text = cleanedText;
@@ -71,19 +109,19 @@ export function consolidateAndSegmentCues(rawCues: SubtitleCue[]): SubtitleCue[]
       continue;
     }
 
-    // Case 2: The last cue extends the new cue (shorter partial update)
+    // Case 2: The last cue already includes the new cue (shorter partial update)
     if (last.text.startsWith(cleanedText)) {
       last.endMs = Math.max(last.endMs, raw.endMs);
       continue;
     }
 
-    // Case 3: Overlapping timestamps (< 400ms apart) with identical text
-    if (Math.abs(raw.startMs - last.startMs) < 500 && raw.text === last.text) {
+    // Case 3: Overlapping timestamps (< 800ms apart) with identical text
+    if (Math.abs(raw.startMs - last.startMs) < 800 && raw.text === last.text) {
       last.endMs = Math.max(last.endMs, raw.endMs);
       continue;
     }
 
-    // Case 4: Completely new cue
+    // Case 4: Completely distinct new cue
     consolidated.push({
       id: raw.id || `cue-${consolidated.length}`,
       startMs: raw.startMs,
@@ -110,7 +148,7 @@ export function consolidateAndSegmentCues(rawCues: SubtitleCue[]): SubtitleCue[]
 
     // Proportional duration distribution based on character length
     const totalChars = sentences.reduce((sum, s) => sum + s.length, 0);
-    const duration = cue.endMs - cue.startMs;
+    const duration = Math.max(cue.endMs - cue.startMs, sentences.length * 1200);
     let currentStart = cue.startMs;
 
     for (let i = 0; i < sentences.length; i++) {
@@ -129,5 +167,18 @@ export function consolidateAndSegmentCues(rawCues: SubtitleCue[]): SubtitleCue[]
     }
   }
 
-  return result;
+  // Phase 3: Final deduplication pass on generated sentence list
+  const finalUnique: SubtitleCue[] = [];
+  for (const s of result) {
+    const isDup = finalUnique.some(existing => {
+      const sameText = existing.text.toLowerCase().trim() === s.text.toLowerCase().trim();
+      const closeTime = Math.abs(existing.startMs - s.startMs) < 15000;
+      return sameText && closeTime;
+    });
+    if (!isDup) {
+      finalUnique.push(s);
+    }
+  }
+
+  return finalUnique;
 }

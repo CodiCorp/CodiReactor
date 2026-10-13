@@ -40,6 +40,7 @@ export class ContentOrchestrator {
   private currentTokens: EnrichedToken[] = [];
   private autoPause = false;
   private isEnabled = true;
+  private hasAuthoritativeTrack = false;
   private cleanupFns: Array<() => void> = [];
 
   constructor() {
@@ -165,6 +166,7 @@ export class ContentOrchestrator {
     const tracks = await this.adapter.extractCaptions();
     if (tracks.length > 0 && tracks[0].cues.length > 0) {
       this.overlay.hideLoadingToast();
+      this.hasAuthoritativeTrack = true;
       this.allCues = consolidateAndSegmentCues(tracks[0].cues);
       this.language = tracks[0].language;
       this.sidebar?.setCues(this.allCues);
@@ -211,8 +213,14 @@ export class ContentOrchestrator {
     if (!this.isEnabled) return;
     this.overlay.hideLoadingToast();
 
+    // If authoritative official YouTube subtitles are active, never let small synthetic DOM fragments pollute
+    if (this.hasAuthoritativeTrack && cues.length <= 5) {
+      return;
+    }
+
     // Consolidate & segment rolling ASR stream into discrete, deduplicated sentences
     if (cues.length > 5) {
+      this.hasAuthoritativeTrack = true;
       this.allCues = consolidateAndSegmentCues(cues);
     } else {
       this.allCues = consolidateAndSegmentCues([...this.allCues, ...cues]);
