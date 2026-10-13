@@ -477,5 +477,43 @@ describe('Language Reactor Parity: parseJSON3 TimedText Consolidation', () => {
       "I'm sure you know, you've seen my videos, probably. If this is your first"
     );
   });
+
+  it('matches Language Reactor 14 sentiment cards structure for vLijZb9BpkE opening exactly', () => {
+    const json = {
+      events: [
+        { tStartMs: 0, dDurationMs: 3100, segs: [{ utf8: "Hello, hello, and welcome to today's video." }] },
+        { tStartMs: 3200, dDurationMs: 4000, segs: [{ utf8: "In today's video, I'm going to give you a chance to practice your English" }] },
+        { tStartMs: 7400, dDurationMs: 3800, segs: [{ utf8: "listening skills. We're going to have a conversation. I'm" }] },
+        { tStartMs: 11400, dDurationMs: 4200, segs: [{ utf8: "going to talk to you about a variety of different topics, and you're going to" }] },
+        { tStartMs: 15800, dDurationMs: 4100, segs: [{ utf8: "have a chance to practice listening to and understanding real-world spoken" }] },
+        { tStartMs: 20100, dDurationMs: 3200, segs: [{ utf8: "English. This is a topic, or rather a video, that" }] },
+        { tStartMs: 23500, dDurationMs: 4500, segs: [{ utf8: "many of you have requested, and I think it's a great idea because honestly, the" }] },
+        { tStartMs: 28200, dDurationMs: 4000, segs: [{ utf8: "more you listen to English, the more exposure you get to the English" }] },
+        { tStartMs: 32400, dDurationMs: 4800, segs: [{ utf8: "language, the better your English will become and the faster you will improve." }] },
+        { tStartMs: 37400, dDurationMs: 2800, segs: [{ utf8: "Now, today I'm going to tell you a bit more" }] },
+        { tStartMs: 40400, dDurationMs: 4200, segs: [{ utf8: "about myself. This is not something I normally talk about on this channel. The" }] },
+        { tStartMs: 44800, dDurationMs: 4900, segs: [{ utf8: "focus is normally grammar, vocabulary, speaking, and pronunciation, but I know" }] },
+        { tStartMs: 49900, dDurationMs: 4100, segs: [{ utf8: "many of you are curious about my background, how I started teaching" }] },
+        { tStartMs: 54200, dDurationMs: 3500, segs: [{ utf8: "English, so I thought this would be a good opportunity to" }] },
+      ],
+    };
+
+    const cues = parseJSON3(json);
+    expect(cues).toHaveLength(14);
+    expect(cues[0].text).toBe("Hello, hello, and welcome to today's video.");
+    expect(cues[1].text).toBe("In today's video, I'm going to give you a chance to practice your English");
+    expect(cues[2].text).toBe("listening skills. We're going to have a conversation. I'm");
+    expect(cues[3].text).toBe("going to talk to you about a variety of different topics, and you're going to");
+    expect(cues[4].text).toBe("have a chance to practice listening to and understanding real-world spoken");
+    expect(cues[5].text).toBe("English. This is a topic, or rather a video, that");
+    expect(cues[6].text).toBe("many of you have requested, and I think it's a great idea because honestly, the");
+    expect(cues[7].text).toBe("more you listen to English, the more exposure you get to the English");
+    expect(cues[8].text).toBe("language, the better your English will become and the faster you will improve.");
+    expect(cues[9].text).toBe("Now, today I'm going to tell you a bit more");
+    expect(cues[10].text).toBe("about myself. This is not something I normally talk about on this channel. The");
+    expect(cues[11].text).toBe("focus is normally grammar, vocabulary, speaking, and pronunciation, but I know");
+    expect(cues[12].text).toBe("many of you are curious about my background, how I started teaching");
+    expect(cues[13].text).toBe("English, so I thought this would be a good opportunity to");
+  });
 });
 

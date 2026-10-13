@@ -311,4 +311,59 @@ describe('YouTubeAdapter Layout & Docking', () => {
 
     document.body.classList.remove('cr-sidebar-closed');
   });
+
+  it('receives and emits full-video subtitles from MAIN proxy CR_OFFICIAL_FULL_SUBTITLES', async () => {
+    const { YouTubeAdapter } = await import('../src/adapters/YouTubeAdapter');
+    adapter = new YouTubeAdapter();
+
+    const emittedCues: any[] = [];
+    adapter.onCaptionUpdate((cues: any) => {
+      emittedCues.push(...cues);
+    });
+
+    const player = document.createElement('div');
+    player.id = 'movie_player';
+    const video = document.createElement('video');
+    video.className = 'html5-main-video';
+    player.appendChild(video);
+    document.body.appendChild(player);
+
+    // Initialize adapter (registers window message listener)
+    await adapter.initialize();
+
+    const sampleJson3 = JSON.stringify({
+      events: [
+        { tStartMs: 0, dDurationMs: 3100, segs: [{ utf8: "Hello, hello, and welcome to today's video." }] },
+        { tStartMs: 3200, dDurationMs: 4000, segs: [{ utf8: "In today's video, I'm going to give you a chance to practice your English" }] },
+      ],
+    });
+
+    // Simulate postMessage from fetchProxy.js (MAIN world)
+    window.postMessage(
+      {
+        source: 'CODIREACTOR_MAIN_PROXY',
+        type: 'CR_OFFICIAL_FULL_SUBTITLES',
+        payload: {
+          url: 'https://www.youtube.com/api/timedtext?v=vLijZb9BpkE&fmt=json3',
+          body: sampleJson3,
+          format: 'json3',
+        },
+      },
+      '*'
+    );
+
+    // Wait for message event loop
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(emittedCues).toHaveLength(2);
+    expect(emittedCues[0].text).toBe("Hello, hello, and welcome to today's video.");
+    expect(emittedCues[1].text).toBe("In today's video, I'm going to give you a chance to practice your English");
+
+    // Calling extractCaptions() should immediately return these cached full-video captions
+    const tracks = await adapter.extractCaptions();
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].cues).toHaveLength(2);
+
+    adapter.destroy();
+  });
 });

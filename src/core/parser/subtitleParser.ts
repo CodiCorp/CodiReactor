@@ -337,9 +337,10 @@ export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
     const cur = filtered[i];
     const next = filtered[i + 1];
 
-    // Language Reactor combines crawling pairs for ASR tracks, or non-terminal clauses for manual tracks
+    // Language Reactor combines crawling pairs only when the clause is non-terminal (!isCurComplete)
+    // and there is no natural speech pause between events (gap <= 10ms)
     const isCurComplete = /[.!?]$/.test(cur.text.trim());
-    const canCombine = cur.isASR ? true : !isCurComplete;
+    const canCombine = !isCurComplete;
     const hasNext = !!next;
     const isGapSmall = hasNext && (next.startMs - cur.rawEnd <= 10);
 
