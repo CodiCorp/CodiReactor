@@ -76,6 +76,9 @@ export class ContentOrchestrator {
     this.overlay.setCallbacks({
       onWordClick: (word, lemma, el) => this.handleWordClick(word, lemma, el),
       onWordRightClick: (word, lemma) => this.handleWordRightClick(word, lemma),
+      onMarkKnown: (lemma) => this.handleMarkKnown(lemma),
+      onMarkLearning: (lemma) => this.handleMarkLearning(lemma),
+      getWordStatus: (lemma) => this.getWordStatus(lemma),
       onSeekPrev: () => this.seekToPrevCue(),
       onSeekNext: () => this.seekToNextCue(),
       onReplayCurrent: () => this.replayCurrentCue(),
@@ -234,18 +237,47 @@ export class ContentOrchestrator {
     if (!this.isEnabled) return;
     this.overlay.hideLoadingToast();
 
-    // If authoritative official YouTube subtitles are active, never let small synthetic DOM fragments pollute
-    if (this.hasAuthoritativeTrack && cues.length <= 5) {
+    // LOCK: Once we have authoritative official YouTube subtitles (from playerResponse/TextTrack/fetch),
+    // completely ignore ALL subsequent caption updates from DOM observer or other synthetic sources.
+    // This is the definitive fix for the "not connected to real YouTube subtitle" sync issue.
+    if (this.hasAuthoritativeTrack) {
       return;
     }
 
-    // Consolidate & segment rolling ASR stream into discrete, deduplicated sentences
+    // If we receive a large batch (>5 cues), this is likely an official track extraction.
+    // Lock it in as authoritative and consolidate once.
     if (cues.length > 5) {
       this.hasAuthoritativeTrack = true;
       this.allCues = consolidateAndSegmentCues(cues);
-    } else {
-      this.allCues = consolidateAndSegmentCues([...this.allCues, ...cues]);
+      this.sidebar?.setCues(this.allCues);
+
+      const video = this.adapter?.getVideoElement();
+      const currentTimeMs = video ? Math.round(video.currentTime * 1000) : 0;
+      this.handleTimeUpdate(currentTimeMs);
+      return;
     }
+
+    // For small incremental cues (DOM observer fallback when no official track exists):
+    // Deduplicate against existing cues before adding
+    const newCues: SubtitleCue[] = [];
+    for (const cue of cues) {
+      const normNew = cue.text.toLowerCase().replace(/[^a-z0-9]/gi, '');
+      if (normNew.length < 3) continue;
+
+      const isDuplicate = this.allCues.some(existing => {
+        const normExisting = existing.text.toLowerCase().replace(/[^a-z0-9]/gi, '');
+        return normExisting === normNew && Math.abs(existing.startMs - cue.startMs) < 90000;
+      });
+
+      if (!isDuplicate) {
+        newCues.push(cue);
+      }
+    }
+
+    if (newCues.length === 0) return;
+
+    // Only consolidate the new cues together with existing, not the full list each time
+    this.allCues = consolidateAndSegmentCues([...this.allCues, ...newCues]);
 
     // Update sidebar transcript
     this.sidebar?.setCues(this.allCues);
@@ -337,6 +369,16 @@ export class ContentOrchestrator {
       video.pause();
     }
 
+    // Subtitle overlay words display the compact blue dictionary balloon
+    // directly (matching image copy 5 & 6), which is already handled and pinned by OverlayManager.
+    // Only open the full dictionary popup for sidebar elements or non-overlay words.
+    if (element.classList?.contains('cr-word') || element.dataset?.lemma) {
+      return;
+    }
+
+    // Always dismiss any existing popup first (prevents stale popups)
+    this.overlay.hideDictPopup();
+
     // Look up the word in dictionary
     const result = await lookupWord(lemma, this.language);
 
@@ -398,11 +440,55 @@ export class ContentOrchestrator {
   }
 
   private handleWordRightClick(word: string, lemma: string): void {
-    const newStatus = toggleWordStatus(lemma, this.vocab);
+    this.handleMarkLearning(lemma);
+  }
+
+  private getWordStatus(lemma: string): 'known' | 'learning' | 'suggested' | 'ignored' {
+    const clean = lemma.toLowerCase();
+    if (this.vocab.knownWords.has(clean)) return 'known';
+    if (this.vocab.learningWords.has(clean)) return 'learning';
+    if (this.vocab.ignoredWords.has(clean)) return 'ignored';
+    return 'suggested';
+  }
+
+  private handleMarkKnown(lemma: string): void {
+    const clean = lemma.toLowerCase();
+    this.vocab.knownWords.add(clean);
+    this.vocab.learningWords.delete(clean);
+    this.vocab.ignoredWords.delete(clean);
+    this.sidebar?.setWordStatus(clean, 'known');
     this.refreshCurrentCue();
     this.messageBus.send({
       type: 'WORD_STATUS_CHANGED',
-      payload: { lemma, status: newStatus },
+      payload: { lemma: clean, status: 'known' },
+      source: 'content',
+    });
+  }
+
+  private handleMarkLearning(lemma: string): void {
+    const clean = lemma.toLowerCase();
+    this.vocab.learningWords.add(clean);
+    this.vocab.knownWords.delete(clean);
+    this.vocab.ignoredWords.delete(clean);
+    this.sidebar?.setWordStatus(clean, 'learning');
+
+    const cue = this.currentCueIndex >= 0 ? this.allCues[this.currentCueIndex] : null;
+    this.sidebar?.addSavedWord(clean, clean, cue?.text || '');
+    this.messageBus.send({
+      type: 'SAVE_PHRASE',
+      payload: {
+        word: clean,
+        sentence: cue?.text || '',
+        timestamp: cue?.startMs || 0,
+        platform: this.adapter?.platformId || 'unknown',
+      },
+      source: 'content',
+    });
+
+    this.refreshCurrentCue();
+    this.messageBus.send({
+      type: 'WORD_STATUS_CHANGED',
+      payload: { lemma: clean, status: 'learning' },
       source: 'content',
     });
   }

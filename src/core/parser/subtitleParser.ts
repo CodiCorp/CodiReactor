@@ -229,6 +229,65 @@ export function parseJSON3(json: YouTubeJSON3): SubtitleCue[] {
   return cues;
 }
 
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
+}
+
+/**
+ * YouTube XML TimedText Parser (handles both <transcript><text ...> and <timedtext><p t="..." d="...">)
+ */
+export function parseYouTubeXML(xmlContent: string): SubtitleCue[] {
+  const cues: SubtitleCue[] = [];
+  let index = 0;
+
+  // Format 1: <text start="1.52" dur="3.4">Hello world</text>
+  const textTagRegex = /<text\s+[^>]*start=["']([\d.]+)["'][^>]*dur=["']([\d.]+)["'][^>]*>([\s\S]*?)<\/text>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = textTagRegex.exec(xmlContent)) !== null) {
+    const [, startSec, durSec, rawText] = match;
+    const startMs = Math.round(parseFloat(startSec) * 1000);
+    const endMs = startMs + Math.round(parseFloat(durSec) * 1000);
+    const text = decodeHtmlEntities(stripTags(rawText.replace(/<br\s*\/?>/gi, ' '))).trim();
+    if (text) {
+      cues.push({
+        id: `yt-xml-${index++}`,
+        startMs,
+        endMs,
+        text,
+      });
+    }
+  }
+
+  if (cues.length > 0) return cues;
+
+  // Format 2: <p t="1520" d="3400">Hello</p>
+  const pTagRegex = /<p\s+[^>]*t=["'](\d+)["'][^>]*d=["'](\d+)["'][^>]*>([\s\S]*?)<\/p>/gi;
+  while ((match = pTagRegex.exec(xmlContent)) !== null) {
+    const [, tMs, dMs, rawText] = match;
+    const startMs = parseInt(tMs, 10);
+    const endMs = startMs + parseInt(dMs, 10);
+    const text = decodeHtmlEntities(stripTags(rawText.replace(/<br\s*\/?>/gi, ' '))).trim();
+    if (text) {
+      cues.push({
+        id: `yt-xml-p-${index++}`,
+        startMs,
+        endMs,
+        text,
+      });
+    }
+  }
+
+  return cues;
+}
+
 // ─── Auto-detect and parse ───────────────────────
 
 export function autoParseSubtitles(content: string): SubtitleCue[] {
@@ -244,6 +303,12 @@ export function autoParseSubtitles(content: string): SubtitleCue[] {
     } catch {
       // Not valid JSON, fall through
     }
+  }
+
+  // YouTube XML timedtext / transcript
+  if (trimmed.includes('<transcript') || (trimmed.includes('<text') && trimmed.includes('start=')) || (trimmed.includes('<timedtext') && trimmed.includes('<p '))) {
+    const ytXmlCues = parseYouTubeXML(trimmed);
+    if (ytXmlCues.length > 0) return ytXmlCues;
   }
 
   // TTML / XML

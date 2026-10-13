@@ -46,11 +46,11 @@ export interface EnrichedToken {
 
 /** Color palette for token statuses */
 export const TOKEN_COLORS: Record<TokenStatus, string> = {
-  known: '#4ade80',      // Mint green
-  suggested: '#fb923c',  // Warm orange
-  learning: '#a855f7',   // Deep purple
+  known: '#7df9c2',      // Mint green (configured known words)
+  suggested: '#c084fc',  // Purple violet (new word never seen before / unconfigured)
+  learning: '#fbc18d',   // Warm peach orange (marked as learned / to practice)
   ignored: '#8c8c8c',    // Muted gray
-  special: '#2dd4bf',    // Cyan/teal
+  special: '#67e8f9',    // Cyan/teal
 } as const;
 
 /** A parsed caption track containing all cues for a language */

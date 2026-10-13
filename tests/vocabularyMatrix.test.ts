@@ -71,11 +71,11 @@ describe('getTokenColor', () => {
     expect(getTokenColor('known')).toBe(TOKEN_COLORS.known);
   });
 
-  it('returns orange for suggested', () => {
+  it('returns purple for suggested (new unconfigured word)', () => {
     expect(getTokenColor('suggested')).toBe(TOKEN_COLORS.suggested);
   });
 
-  it('returns purple for learning', () => {
+  it('returns orange for learning (marked as learned)', () => {
     expect(getTokenColor('learning')).toBe(TOKEN_COLORS.learning);
   });
 });

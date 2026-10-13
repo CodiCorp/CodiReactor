@@ -37,8 +37,8 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   async initialize(): Promise<void> {
     await super.initialize();
 
-    // Auto-hide YouTube's native subtitle overlay so it never overlaps
-    this.setAutoHideNativeCaptions(true);
+    // Do not hide YouTube's native subtitle until we are fully synchronized with authoritative track
+    this.setAutoHideNativeCaptions(false);
 
     // Wait for the video element to be present
     await this.waitForElement(SELECTORS.video, 10000);
@@ -236,6 +236,11 @@ export class YouTubeAdapter extends BasePlatformAdapter {
             const cues = parseJSON3(json);
             if (cues.length > 0) {
               this.hasAuthoritativeCaptions = true;
+              // Kill DOM observer — official track is authoritative
+              if (this.captionObserver) {
+                this.captionObserver.disconnect();
+                this.captionObserver = null;
+              }
               return [{
                 language: trackMeta.languageCode || 'en',
                 languageName: trackMeta.name?.simpleText || trackMeta.languageCode || 'English',
@@ -290,6 +295,11 @@ export class YouTubeAdapter extends BasePlatformAdapter {
           }
           if (cues.length > 0) {
             this.hasAuthoritativeCaptions = true;
+            // Kill DOM observer — TextTrack is authoritative
+            if (this.captionObserver) {
+              this.captionObserver.disconnect();
+              this.captionObserver = null;
+            }
             return [{
               language: track.language || 'und',
               languageName: track.label || track.language || 'Unknown',
@@ -353,25 +363,74 @@ export class YouTubeAdapter extends BasePlatformAdapter {
     this.fetchProxyNonce = crypto.randomUUID();
 
     // Listen for relayed subtitle data from the MAIN world script
-    const onMessage = (event: MessageEvent) => {
+    const onMessage = async (event: MessageEvent) => {
       if (event.source !== window) return;
       if (event.data?.nonce !== this.fetchProxyNonce) return;
+
+      if (event.data?.type === 'CR_OFFICIAL_TRACKS_AVAILABLE') {
+        const { captionTracks } = event.data.payload || {};
+        if (Array.isArray(captionTracks) && captionTracks.length > 0 && !this.hasAuthoritativeCaptions) {
+          try {
+            const track = captionTracks.find((t: any) => t.languageCode === 'en' || t.vssId?.includes('en')) || captionTracks[0];
+            if (track?.baseUrl) {
+              const fetchUrl = track.baseUrl.includes('fmt=') ? track.baseUrl : `${track.baseUrl}&fmt=json3`;
+              const resp = await fetch(fetchUrl);
+              if (resp.ok) {
+                const text = await resp.text();
+                let cues: SubtitleCue[] = [];
+                if (text.trim().startsWith('{')) {
+                  cues = parseJSON3(JSON.parse(text));
+                } else {
+                  cues = autoParseSubtitles(text);
+                }
+                if (cues.length > 0) {
+                  this.hasAuthoritativeCaptions = true;
+                  this.currentCues = cues;
+                  this.emitCaptions(cues);
+                  if (this.captionObserver) {
+                    this.captionObserver.disconnect();
+                    this.captionObserver = null;
+                  }
+                  this.setAutoHideNativeCaptions(true);
+                  return;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[YouTubeAdapter] Error fetching official track from playerResponse:', e);
+          }
+        }
+      }
+
       if (event.data?.type !== 'CR_SUBTITLE_DATA') return;
 
       try {
         const { url, body, format } = event.data.payload;
         let cues: SubtitleCue[] = [];
 
-        if (format === 'json3' && body) {
-          cues = parseJSON3(JSON.parse(body));
-        } else if (body) {
-          cues = autoParseSubtitles(body);
+        if (body) {
+          const trimmed = body.trim();
+          if (trimmed.startsWith('{')) {
+            try {
+              cues = parseJSON3(JSON.parse(trimmed));
+            } catch {
+              cues = autoParseSubtitles(body);
+            }
+          } else {
+            cues = autoParseSubtitles(body);
+          }
         }
 
         if (cues.length > 0) {
           this.hasAuthoritativeCaptions = true;
           this.currentCues = cues;
           this.emitCaptions(cues);
+          // Official track captured — kill DOM observer to prevent any synthetic pollution
+          if (this.captionObserver) {
+            this.captionObserver.disconnect();
+            this.captionObserver = null;
+          }
+          this.setAutoHideNativeCaptions(true);
         }
       } catch (err) {
         console.error('[YouTubeAdapter] Error parsing intercepted subtitles:', err);
@@ -386,7 +445,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
   }
 
   /**
-   * Inject fetchProxy.js into the MAIN world to intercept YouTube's subtitle fetches.
+   * Inject fetchProxy into the MAIN world to intercept YouTube's subtitle fetches and playerResponse.
    */
   private injectFetchProxy(): void {
     const script = document.createElement('script');
@@ -394,7 +453,18 @@ export class YouTubeAdapter extends BasePlatformAdapter {
       (function() {
         const NONCE = '${this.fetchProxyNonce}';
         const originalFetch = window.fetch;
-        
+
+        function relaySubtitle(url, body) {
+          if (!body) return;
+          const format = url.includes('fmt=json3') || body.trim().startsWith('{') ? 'json3' : 'xml';
+          window.postMessage({
+            nonce: NONCE,
+            type: 'CR_SUBTITLE_DATA',
+            payload: { url, body, format }
+          }, '*');
+        }
+
+        // Intercept window.fetch
         window.fetch = function(...args) {
           const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
           
@@ -402,12 +472,7 @@ export class YouTubeAdapter extends BasePlatformAdapter {
             return originalFetch.apply(this, args).then(response => {
               const cloned = response.clone();
               cloned.text().then(body => {
-                const format = url.includes('fmt=json3') ? 'json3' : 'vtt';
-                window.postMessage({
-                  nonce: NONCE,
-                  type: 'CR_SUBTITLE_DATA',
-                  payload: { url, body, format }
-                }, '*');
+                relaySubtitle(url, body);
               }).catch(() => {});
               return response;
             });
@@ -415,6 +480,46 @@ export class YouTubeAdapter extends BasePlatformAdapter {
           
           return originalFetch.apply(this, args);
         };
+
+        // Intercept XMLHttpRequest
+        const origXhrOpen = XMLHttpRequest.prototype.open;
+        const origXhrSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+          this._crTimedTextUrl = typeof url === 'string' && (url.includes('/api/timedtext') || url.includes('timedtext?')) ? url : null;
+          return origXhrOpen.call(this, method, url, ...rest);
+        };
+        XMLHttpRequest.prototype.send = function(...args) {
+          if (this._crTimedTextUrl) {
+            this.addEventListener('load', function() {
+              try {
+                relaySubtitle(this._crTimedTextUrl, this.responseText);
+              } catch (_) {}
+            });
+          }
+          return origXhrSend.apply(this, args);
+        };
+
+        // Probe official playerResponse caption tracks
+        function probeOfficialTracks() {
+          try {
+            const player = document.querySelector('#movie_player');
+            const resp = player?.getPlayerResponse?.() || window.ytInitialPlayerResponse;
+            const captionTracks = resp?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+            if (Array.isArray(captionTracks) && captionTracks.length > 0) {
+              window.postMessage({
+                nonce: NONCE,
+                type: 'CR_OFFICIAL_TRACKS_AVAILABLE',
+                payload: { captionTracks }
+              }, '*');
+            }
+          } catch (_) {}
+        }
+
+        probeOfficialTracks();
+        window.addEventListener('yt-navigate-finish', probeOfficialTracks);
+        window.addEventListener('load', probeOfficialTracks);
+        setTimeout(probeOfficialTracks, 1000);
+        setTimeout(probeOfficialTracks, 3000);
       })();
     `;
     (document.head || document.documentElement).appendChild(script);

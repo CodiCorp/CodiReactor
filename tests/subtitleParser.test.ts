@@ -282,4 +282,18 @@ Hello SRT!`;
     expect(cues).toHaveLength(1);
     expect(cues[0].text).toBe('Hello JSON!');
   });
+
+  it('detects and parses YouTube XML timedtext', () => {
+    const xml = `<transcript>
+      <text start="1.52" dur="3.4">Hello YouTube &amp; World</text>
+      <text start="5.0" dur="2.1">Second line</text>
+    </transcript>`;
+
+    const cues = autoParseSubtitles(xml);
+    expect(cues).toHaveLength(2);
+    expect(cues[0].text).toBe('Hello YouTube & World');
+    expect(cues[0].startMs).toBe(1520);
+    expect(cues[0].endMs).toBe(4920);
+    expect(cues[1].text).toBe('Second line');
+  });
 });

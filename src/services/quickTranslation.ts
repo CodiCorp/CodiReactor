@@ -148,11 +148,18 @@ const SEED_EN_AR: Record<string, string[]> = {
 
 // Seed collocations
 const SEED_COLLOCATIONS: Record<string, { text: string; translation: string }> = {
+  welcome: { text: 'welcome to', translation: 'مرحبا بك في' },
+  variety: { text: 'a variety of', translation: 'مجموعة متنوعة من' },
   chance: { text: 'have a chance', translation: 'لدي فرصة' },
   listening: { text: 'listening skills', translation: 'مهارات الاستماع' },
   conversation: { text: 'have a conversation', translation: 'إجراء محادثة' },
   practice: { text: 'practice listening', translation: 'ممارسة الاستماع' },
   exposure: { text: 'get exposure to', translation: 'الاحتكاك باللغة' },
+  high: { text: 'are they high', translation: 'هل هم في غاية النشوة؟' },
+  model: { text: 'this model', translation: 'هذا النموذج' },
+  benchmark: { text: 'on benchmark', translation: 'على مقياس الأداء' },
+  emergency: { text: 'emergency announcement', translation: 'إعلان طارئ' },
+  stream: { text: 'announcement stream', translation: 'بث الإعلان' },
 };
 
 /**

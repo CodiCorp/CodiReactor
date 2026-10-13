@@ -394,13 +394,24 @@ export class SidebarPanel {
         if (token.isPunctuation) {
           wordSpan.style.color = '#777777';
         } else {
-          // CEFR color palette matching ref/image copy.png
-          const wordLen = token.cleanText.length;
-          let wordColor = '#7df9c2'; // mint green (common / known)
-          if (wordLen >= 5 && wordLen <= 7) {
-            wordColor = '#fbc18d'; // peach orange (intermediate)
-          } else if (wordLen > 7) {
-            wordColor = '#c084fc'; // purple violet (advanced)
+          // Vocabulary status color system (image copy 5 & image copy 6 parity)
+          let wordColor = '#c084fc'; // Default: purple violet for new unconfigured words (image copy 6 parity)
+          let hasBorder = false;
+
+          if (this.knownWords.has(token.lemma)) {
+            wordColor = '#7df9c2'; // Mint green for known words
+          } else if (this.learningWords.has(token.lemma)) {
+            wordColor = '#fbc18d'; // Warm peach orange for learned words (image copy 5 parity)
+            hasBorder = true;
+          } else if (this.ignoredWords.has(token.lemma)) {
+            wordColor = '#777777';
+          } else {
+            const wordLen = token.cleanText.length;
+            if (wordLen <= 3) {
+              wordColor = '#7df9c2'; // High-frequency common words (a, the, is)
+            } else {
+              wordColor = '#c084fc'; // New unconfigured word in purple!
+            }
           }
 
           wordSpan.style.cssText = `
@@ -410,6 +421,7 @@ export class SidebarPanel {
             transition: background 0.15s ease !important;
             display: inline-block !important;
             color: ${wordColor} !important;
+            ${hasBorder ? 'border: 1.5px solid #fbc18d !important;' : ''}
           `;
 
           // Word Hover: Show dark card (Screenshot 093511.png)
@@ -833,20 +845,19 @@ export class SidebarPanel {
         chip.className = 'cr-vocab-chip';
         chip.textContent = item.word;
 
-        // Color coding based on status
-        let color = '#7df9c2'; // mint green default
+        // Color coding based on status (Parity with ref/image copy 5.png & image copy 6.png)
+        let color = '#c084fc'; // Purple for new unconfigured words (image copy 6)
         let isStrikethrough = false;
+        let isLearning = false;
+
         if (this.knownWords.has(item.lemma)) {
-          color = '#4ade80'; // verified green
+          color = '#7df9c2'; // Mint green for known words
         } else if (this.learningWords.has(item.lemma)) {
-          color = '#fb923c'; // learning orange
+          color = '#fbc18d'; // Warm peach orange for learning words (image copy 5)
+          isLearning = true;
         } else if (this.ignoredWords.has(item.lemma)) {
-          color = '#71717a'; // ignored gray
+          color = '#71717a'; // Ignored gray
           isStrikethrough = true;
-        } else if (item.rank > 300) {
-          color = '#fbc18d';
-        } else if (item.rank > 1000) {
-          color = '#c084fc';
         }
 
         chip.style.cssText = `
@@ -854,8 +865,9 @@ export class SidebarPanel {
           font-size: 13.5px !important;
           font-weight: 500 !important;
           color: ${color} !important;
-          padding: 2px 4px !important;
+          padding: 2px 6px !important;
           border-radius: 4px !important;
+          ${isLearning ? 'border: 1px solid #fbc18d !important;' : ''}
           text-decoration: ${isStrikethrough ? 'line-through' : 'none'} !important;
           transition: background 0.15s ease !important;
           user-select: none !important;
@@ -908,15 +920,23 @@ export class SidebarPanel {
   }
 
   private showWordStatusMenu(word: string, lemma: string, x: number, y: number): void {
-    const existing = document.querySelector('.cr-floating-status-menu');
-    if (existing) existing.remove();
+    // Remove any existing status menus first (prevents stacking)
+    const existingMenus = document.querySelectorAll('.cr-floating-status-menu');
+    existingMenus.forEach(m => m.remove());
 
     const menu = document.createElement('div');
     menu.className = 'cr-floating-status-menu';
+
+    // Position with viewport clamping to prevent off-screen placement
+    const menuWidth = 180;
+    const menuHeight = 165;
+    const safeX = Math.max(8, Math.min(x, window.innerWidth - menuWidth - 8));
+    const safeY = Math.max(8, Math.min(y, window.innerHeight - menuHeight - 8));
+
     menu.style.cssText = `
       position: fixed !important;
-      top: ${Math.min(y, window.innerHeight - 160)}px !important;
-      left: ${Math.min(x, window.innerWidth - 200)}px !important;
+      top: ${safeY}px !important;
+      left: ${safeX}px !important;
       background: #18181b !important;
       border: 1px solid #3f3f46 !important;
       border-radius: 8px !important;
@@ -954,12 +974,12 @@ export class SidebarPanel {
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
         action();
-        menu.remove();
+        removeMenu();
       });
       return btn;
     };
 
-    menu.appendChild(makeOption('✓ Mark as Known (1)', '#4ade80', () => {
+    menu.appendChild(makeOption('✓ Mark as Known (1)', '#7df9c2', () => {
       this.knownWords.add(lemma);
       this.learningWords.delete(lemma);
       this.ignoredWords.delete(lemma);
@@ -968,7 +988,7 @@ export class SidebarPanel {
       this.renderWordsTab();
     }));
 
-    menu.appendChild(makeOption('📖 Mark as Learning (2)', '#fb923c', () => {
+    menu.appendChild(makeOption('📖 Mark as Learning (2)', '#fbc18d', () => {
       this.learningWords.add(lemma);
       this.knownWords.delete(lemma);
       this.ignoredWords.delete(lemma);
@@ -977,7 +997,7 @@ export class SidebarPanel {
       this.renderWordsTab();
     }));
 
-    menu.appendChild(makeOption('🚫 Don\'t Learn / Ignore (3)', '#9ca3af', () => {
+    menu.appendChild(makeOption('🚫 Don\'t Learn / Ignore (3)', '#71717a', () => {
       this.ignoredWords.add(lemma);
       this.knownWords.delete(lemma);
       this.learningWords.delete(lemma);
@@ -988,19 +1008,61 @@ export class SidebarPanel {
 
     document.body.appendChild(menu);
 
-    const closeHandler = () => {
+    // Unified cleanup function
+    const removeMenu = () => {
       menu.remove();
-      window.removeEventListener('click', closeHandler);
+      document.removeEventListener('mousedown', outsideClickHandler);
+      document.removeEventListener('contextmenu', outsideContextHandler);
+      window.removeEventListener('scroll', removeMenu);
+      window.removeEventListener('resize', removeMenu);
     };
-    setTimeout(() => window.addEventListener('click', closeHandler), 10);
+
+    // Close on click outside the menu
+    const outsideClickHandler = (e: MouseEvent) => {
+      if (!menu.contains(e.target as Node)) {
+        removeMenu();
+      }
+    };
+
+    // Close on right-click outside (so new right-click replaces old menu)
+    const outsideContextHandler = (e: MouseEvent) => {
+      if (!menu.contains(e.target as Node)) {
+        removeMenu();
+      }
+    };
+
+    // Defer listeners to avoid immediate trigger from the opening contextmenu event
+    setTimeout(() => {
+      document.addEventListener('mousedown', outsideClickHandler);
+      document.addEventListener('contextmenu', outsideContextHandler);
+      window.addEventListener('scroll', removeMenu, { once: true });
+      window.addEventListener('resize', removeMenu, { once: true });
+    }, 50);
   }
 
   private renderSavedTab(): void {
     if (!this.cueListEl) return;
     this.cueListEl.replaceChildren();
 
+    // 1. Saved Words (Words marked for practice)
+    let savedWords: Array<{ word: string; lemma: string; sentence: string }> = [];
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('cr_saved_words_list');
+        if (raw) savedWords = JSON.parse(raw);
+      }
+    } catch { /* ignore */ }
+
+    // If learningWords has items not in savedWords list, add them too
+    for (const lw of this.learningWords) {
+      if (!savedWords.some(sw => sw.lemma === lw)) {
+        savedWords.push({ word: lw, lemma: lw, sentence: '' });
+      }
+    }
+
     const savedCues = this.cues.filter(c => this.savedCueIds.has(c.id));
-    if (savedCues.length === 0) {
+
+    if (savedWords.length === 0 && savedCues.length === 0) {
       const emptyMsg = document.createElement('div');
       emptyMsg.style.cssText = `
         padding: 32px 16px !important;
@@ -1008,60 +1070,203 @@ export class SidebarPanel {
         color: #71717a !important;
         font-size: 13px !important;
       `;
-      emptyMsg.textContent = 'No saved phrases yet. Click ☆ on any sentence to save it.';
+      emptyMsg.textContent = 'No saved words or phrases yet. Right-click a word or click ☆ on any sentence to save.';
       this.cueListEl.appendChild(emptyMsg);
       return;
     }
 
-    savedCues.forEach((cue) => {
-      const row = document.createElement('div');
-      row.style.cssText = `
+    if (savedWords.length > 0) {
+      const wordsHeader = document.createElement('div');
+      wordsHeader.className = 'cr-rank-header';
+      wordsHeader.textContent = `Saved Words (${savedWords.length})`;
+      wordsHeader.style.cssText = `
+        background: #27272a !important;
+        border-top: 1px solid #3f3f46 !important;
+        border-bottom: 1px solid #3f3f46 !important;
+        padding: 6px 12px !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        color: #fbc18d !important;
+        letter-spacing: 0.02em !important;
+      `;
+      this.cueListEl.appendChild(wordsHeader);
+
+      const wordsGrid = document.createElement('div');
+      wordsGrid.style.cssText = `
         display: flex !important;
-        align-items: flex-start !important;
-        padding: 10px 14px !important;
-        border-top: 1px solid #1a1a1a !important;
+        flex-direction: column !important;
+        gap: 6px !important;
+        padding: 8px 12px !important;
         background: #0d0d0d !important;
-        gap: 10px !important;
       `;
 
-      const playBtn = document.createElement('button');
-      playBtn.textContent = '▶';
-      playBtn.style.cssText = `
-        width: 20px !important;
-        height: 20px !important;
-        border-radius: 50% !important;
-        background: #9333ea !important;
-        color: #fff !important;
-        border: none !important;
-        cursor: pointer !important;
-        font-size: 10px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-      `;
-      playBtn.addEventListener('click', () => this.callbacks?.onSeek(cue.startMs));
+      savedWords.forEach((sw) => {
+        const itemRow = document.createElement('div');
+        itemRow.style.cssText = `
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          padding: 6px 8px !important;
+          border-radius: 6px !important;
+          background: #18181b !important;
+          border: 1px solid rgba(251, 193, 141, 0.3) !important;
+        `;
 
-      const text = document.createElement('div');
-      text.textContent = cue.text;
-      text.style.cssText = 'flex: 1; font-size: 13px; color: #e5e5e5;';
+        const wordInfo = document.createElement('div');
+        wordInfo.style.cssText = 'display: flex; flex-direction: column; gap: 2px; flex: 1;';
 
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '🗑️';
-      delBtn.style.cssText = 'background:none; border:none; cursor:pointer; font-size:12px;';
-      delBtn.addEventListener('click', () => {
-        this.savedCueIds.delete(cue.id);
-        this.renderSavedTab();
+        const wordTitle = document.createElement('span');
+        wordTitle.textContent = sw.word;
+        wordTitle.style.cssText = 'color: #fbc18d; font-weight: 600; font-size: 13.5px;';
+        wordInfo.appendChild(wordTitle);
+
+        if (sw.sentence) {
+          const sentContext = document.createElement('span');
+          sentContext.textContent = sw.sentence;
+          sentContext.style.cssText = 'color: #a1a1aa; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;';
+          wordInfo.appendChild(sentContext);
+        }
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '🗑️';
+        delBtn.title = 'Remove saved word';
+        delBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px 4px;';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.learningWords.delete(sw.lemma);
+          this.saveVocabToStorage();
+          try {
+            const raw = localStorage.getItem('cr_saved_words_list');
+            if (raw) {
+              const list = JSON.parse(raw).filter((x: any) => x.lemma !== sw.lemma);
+              localStorage.setItem('cr_saved_words_list', JSON.stringify(list));
+            }
+          } catch { /* ignore */ }
+          this.renderSavedTab();
+        });
+
+        itemRow.appendChild(wordInfo);
+        itemRow.appendChild(delBtn);
+        wordsGrid.appendChild(itemRow);
       });
 
-      row.appendChild(playBtn);
-      row.appendChild(text);
-      row.appendChild(delBtn);
-      this.cueListEl.appendChild(row);
-    });
+      this.cueListEl.appendChild(wordsGrid);
+    }
+
+    if (savedCues.length > 0) {
+      const cuesHeader = document.createElement('div');
+      cuesHeader.className = 'cr-rank-header';
+      cuesHeader.textContent = `Saved Phrases (${savedCues.length})`;
+      cuesHeader.style.cssText = `
+        background: #27272a !important;
+        border-top: 1px solid #3f3f46 !important;
+        border-bottom: 1px solid #3f3f46 !important;
+        padding: 6px 12px !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        color: #d4d4d8 !important;
+        letter-spacing: 0.02em !important;
+      `;
+      this.cueListEl.appendChild(cuesHeader);
+
+      savedCues.forEach((cue) => {
+        const row = document.createElement('div');
+        row.style.cssText = `
+          display: flex !important;
+          align-items: flex-start !important;
+          padding: 10px 14px !important;
+          border-top: 1px solid #1a1a1a !important;
+          background: #0d0d0d !important;
+          gap: 10px !important;
+        `;
+
+        const playBtn = document.createElement('button');
+        playBtn.textContent = '▶';
+        playBtn.style.cssText = `
+          width: 20px !important;
+          height: 20px !important;
+          border-radius: 50% !important;
+          background: #9333ea !important;
+          color: #fff !important;
+          border: none !important;
+          cursor: pointer !important;
+          font-size: 10px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        `;
+        playBtn.addEventListener('click', () => this.callbacks?.onSeek(cue.startMs));
+
+        const text = document.createElement('div');
+        text.textContent = cue.text;
+        text.style.cssText = 'flex: 1; font-size: 13px; color: #e5e5e5;';
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '🗑️';
+        delBtn.style.cssText = 'background:none; border:none; cursor:pointer; font-size:12px;';
+        delBtn.addEventListener('click', () => {
+          this.savedCueIds.delete(cue.id);
+          this.renderSavedTab();
+        });
+
+        row.appendChild(playBtn);
+        row.appendChild(text);
+        row.appendChild(delBtn);
+        this.cueListEl.appendChild(row);
+      });
+    }
   }
 
   setCallbacks(callbacks: SidebarCallbacks): void {
     this.callbacks = callbacks;
+  }
+
+  setWordStatus(lemma: string, status: 'known' | 'learning' | 'ignored'): void {
+    const clean = lemma.toLowerCase();
+    if (status === 'known') {
+      this.knownWords.add(clean);
+      this.learningWords.delete(clean);
+      this.ignoredWords.delete(clean);
+    } else if (status === 'learning') {
+      this.learningWords.add(clean);
+      this.knownWords.delete(clean);
+      this.ignoredWords.delete(clean);
+    } else if (status === 'ignored') {
+      this.ignoredWords.add(clean);
+      this.knownWords.delete(clean);
+      this.learningWords.delete(clean);
+    }
+    this.saveVocabToStorage();
+    if (this.activeTab === 'words') {
+      this.renderWordsTab();
+    } else if (this.activeTab === 'subtitles') {
+      this.renderCues();
+    }
+  }
+
+  addSavedWord(word: string, lemma: string, sentence: string): void {
+    const clean = lemma.toLowerCase();
+    this.learningWords.add(clean);
+    this.knownWords.delete(clean);
+    this.ignoredWords.delete(clean);
+    this.saveVocabToStorage();
+
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('cr_saved_words_list');
+        const list: Array<{ word: string; lemma: string; sentence: string; date: number }> = raw ? JSON.parse(raw) : [];
+        if (!list.some(item => item.lemma === clean)) {
+          list.push({ word, lemma: clean, sentence, date: Date.now() });
+          localStorage.setItem('cr_saved_words_list', JSON.stringify(list));
+        }
+      }
+    } catch { /* ignore */ }
+
+    if (this.activeTab === 'saved') {
+      this.renderSavedTab();
+    } else if (this.activeTab === 'words') {
+      this.renderWordsTab();
+    }
   }
 
   open(): void {
